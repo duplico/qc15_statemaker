@@ -1,0 +1,7 @@
+Input_type,Input_detail,Result_type,Result_detail,Result_duration,Choice_share,Comment
+ENTER,,TEXT,Hello?,,,First entry to the state
+TIMER_R,15,TEXT,Hello?,,1,Recurring timer with multiple possible outcomes
+TIMER_R,15,TEXT,Anyone there?,,1,
+TIMER_R,15,TEXT,What's going on?,,1,
+USER_IN,Hello,TEXT,"Who's there? It's really dark.",,,
+CONTD,,STATE_TRANSITION,FIRST CONTACT,,,
