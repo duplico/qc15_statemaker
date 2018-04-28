@@ -25,13 +25,24 @@ class ActionChoice(object):
         self.choice_share = int(choice_share) if choice_share else 1
         
     def add_results_line(self, action_line):
-        results_tuple = (action_line[2], action_line[3], action_line[4])
+        results_tuple = (
+            action_line[2], 
+            action_line[3], 
+            action_line[4] if action_line[4] else default_duration
+        )
+        
+        assert action_line[2] in VALID_RESULT_TYPES
+        
+        self.results_list.append(results_tuple)
+    
+    def __repr__(self):
+        return str(self.results_list)
         
 class QcState(object):
     def __init__(self, id, name):
         self.name = name
         self.id = id
-        self.actions = dict()
+        self.actionset = dict()
         self.working_input_tuple = None
         
     def add_action_line(self, action_line):
@@ -40,28 +51,38 @@ class QcState(object):
             # We're going to be appending this to the results list of the
             #  working action choice.
             assert self.working_input_tuple
-            # Get the working action choice, and:
-            #working_action_choice.add_results_line(action_line)
-            return
+            # The working Action Choice is the latest in the action set
+            #  indexed by the working input tuple.
+            working_action_choice = self.actionset[self.working_input_tuple][-1]
+            working_action_choice.add_results_line(action_line)
         else:
             # This is its own input tuple. We will definitely be creating a new
             #  Action Choice, which will either be appended to an existing
             #  Action Set or be the first element of a new Action Set.
-            if input_tuple not in self.actions:
+            if input_tuple not in self.actionset:
                 # We must create a new Action Set.
-                self.actions[input_tuple] = []
+                self.actionset[input_tuple] = []
             # Append this Action Choice to the Action Set:
-            new_action_choice = ActionChoice()
+            new_action_choice = ActionChoice(action_line[5])
             new_action_choice.add_results_line(action_line)
-            self.actions[input_tuple].append(new_action_choice)
-        print input_tuple
-        self.working_input_tuple = input_tuple
+            self.actionset[input_tuple].append(new_action_choice)
+            
+            # Update the working input tuple.
+            self.working_input_tuple = input_tuple
+            
+    def __repr__(self):
+        return "QcState(%d, %s, %s)" % (
+            self.id, 
+            self.name, 
+            repr(self.actionset)
+        )
 
 IGNORE_STATES = ['EXAMPLE_NOTPARSED', 'SHEETNAMES']
 VALID_INPUT_TYPES = ['ENTER', 'USER_IN', 'BUTTON', 'NET', 'TIMER', 'TIMER_R',
                      'CONTD']
 VALID_RESULT_TYPES = ['TEXT', 'SET_ANIM_TEMP', 'SET_ANIM_BG', 
                       'STATE_TRANSITION', 'OTHER']
+default_duration = 5
                      
 def main():
     parser = argparse.ArgumentParser("Parse the state data for a qc15 badge.")
@@ -70,8 +91,12 @@ def main():
     parser.add_argument('--default-duration', type=int, default=5,
         help="The default duration of actions whose durations are unspecified.")
     
-    args = parser.parse_args()  
+    args = parser.parse_args()
+    
     assert os.path.isdir(args.statedir)
+    
+    global default_duration
+    default_duration = args.default_duration
     
     current_state_id = 0 # Running counter
     state_names = [] # Mapping of state IDs to names
@@ -130,6 +155,8 @@ def main():
         state = QcState(state_id, state_names[state_id])
         for line in state_definitions[state_id]:
             state.add_action_line(line)
+        states_objects.append(state)
+        print state
     
     
 if __name__ == "__main__":
