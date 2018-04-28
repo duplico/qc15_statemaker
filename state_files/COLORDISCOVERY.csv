@@ -1,0 +1,10 @@
+Input_type,Input_detail,Result_type,Result_detail,Result_duration,Choice_share,Comment
+ENTER,,SET_ANIM_BG,special animation,,11,"random brightness changes to white lights, occasional colors"
+USER_IN,STOP,OTHER,"Freeze lights, white",,,
+CONTD,,TEXT,What? Looks normal to me.,,,
+CONTD,,STATE_TRANSITION,LOCALWCOLOR,,,Or previous state if we got here from somewhere other than DIMCONTROL.
+USER_IN,STOP,OTHER,"Freeze lights, color",,,
+CONTD,,TEXT,"Oh, pretty!",,,
+CONTD,,STATE_TRANSITION,LOCALWCOLOR,,,Or previous state if we got here from somewhere other than DIMCONTROL.
+TIMER,6,TEXT,Nothing? Ah well.,,,Please let's implement the above by DUPLICATING this state rather than
+CONTD,,STATE_TRANSITION,Previous,,,requiring special IF logic in the code?

@@ -1,0 +1,13 @@
+Input_type,Input_detail,Result_type,Result_detail,Result_duration,Choice_share,Comment
+ENTER,,SET_ANIM_BG,brightness changes,,,
+USER_IN,Who are you?,TEXT,It says here... $badge_id,,,
+CONTD,,TEXT,But you can call me $badge_name,,,
+USER_IN,Check network,TEXT,"Do what?",,1,
+USER_IN,Check network,TEXT,"You've lost me.",,1,
+USER_IN,Check network,TEXT,"I don't understand.",,1,
+USER_IN,What do you do?,TEXT,I don't know,,,
+CONTD,,TEXT,But I found this knob!,,,
+CONTD,,SET_ANIM_TEMP,Cycle brightness quickly,,,
+USER_IN,Play with the light,TEXT,Change it? How?,,,
+CONTD,,TEXT,I'll fiddle. Tell me if something happens.,,,
+CONTD,,STATE_TRANSITION,COLORDISCOVERY,,,
