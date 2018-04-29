@@ -28,8 +28,10 @@ VALID_INPUT_TYPES = ['ENTER', 'USER_IN', 'BUTTON', 'NET', 'TIMER', 'TIMER_R',
                      'CONTD']
 VALID_RESULT_TYPES = ['TEXT', 'SET_ANIM_TEMP', 'SET_ANIM_BG', 
                       'STATE_TRANSITION', 'OTHER']
+RESERVED_STATES = ['POP', 'POST']
+SPECIAL_STATES = ['POP', 'GLOBAL']
 default_duration = 5
-                     
+
 state_names = [] # Mapping of state IDs to names
 state_ids = dict() # Mapping of state names to IDs
 states_objects = [] # Mapping of state IDs to state objects
@@ -93,16 +95,28 @@ class ActionChoice(object):
                 s = action_line['Result_detail']
                 if self.state.allow_implicit:
                     # Declare it implicitly for development purposes.
-                    print '!!! WARNING: Implicit declaration of state %s' % s
+                    print '! WARNING: Implicit declaration of state %s' % s
+                    print "  This is probably NOT what you want to do for the"\
+                    " production badge."
+                    
+                    imp_definition_list = [
+                        {'Input_type': 'ENTER', 'Input_detail': '',
+                         'Result_type': 'TEXT', 'Result_detail': s,
+                         'Result_duration': '', 'Choice_share': ''},
+                        {'Input_type': 'CONTD', 'Input_detail': '',
+                         'Result_type': 'STATE_TRANSITION',
+                         'Result_detail': 'POP', 'Result_duration': '',
+                         'Choice_share': ''},
+                    ]
+                    
                     new_state_id = len(state_names)
                     state_names.append(s)
                     state_ids[s] = new_state_id
-                    states_objects.append(QcState(
-                        new_state_id,
-                        s,
-                        self.state.allow_implicit,
-                        True
-                    ))
+                    new_state = QcState(new_state_id, s,
+                                        self.state.allow_implicit, True,
+                                        imp_definition_list)
+                    #new_state.process_definition()
+                    states_objects.append(new_state)
                 else:
                     # Raise an error, as this is a problem for production.
                     self.state.error(
@@ -119,7 +133,7 @@ class ActionChoice(object):
             self.input_tuple,
             '%d/%d' % (self.choice_share,
                        self.state.choice_total(self.input_tuple)),
-            self.results_list
+            #self.results_list
         )
     
     def __repr__(self):
@@ -134,6 +148,7 @@ class ActionChoice(object):
             )
         
 class QcState(object):
+    pop_state_id = None
     def __init__(self, id, name, allow_implicit, implicit=False,
                  definition_list=[]):
         self.name = name
@@ -179,7 +194,6 @@ class QcState(object):
             
         working_action_choice.add_results_line(action_line)
             
-            
     def error(self, message, action_line=None):
         print '!!! ERROR while parsing state %s:' % self.name
         print '\t%s' % message
@@ -192,16 +206,19 @@ class QcState(object):
             raise Exception('Non-existent input tuple specified')
         
         return sum(ac.choice_share for ac in self.actionsets[input_tuple])
-        
-        
+            
     def __str__(self):
-        rep = '%s\n' % self.name
-        rep += '='*len(self.name) + '\n'
-        for input_tuple, action_set in self.actionsets.items():
-            rep += repr(input_tuple) + ':\n'
-            for action_choice in action_set:
-                rep += '\t%s\n' % str(action_choice)
-        return rep
+        out_str = '%d %s' % (self.id, self.name)
+        for input_tuple, action_choices in self.actionsets.items():
+            # if input_tuple[0] == 'ENTER': continue
+            for action_choice in action_choices:
+                if action_choice.dest_state != self: continue
+                out_str += '\n%s("%s")@%s' % (
+                    input_tuple[0],
+                    input_tuple[1],
+                    action_choice.label_tuple()[1]
+                )
+        return out_str
         
     def __repr__(self):
         return "QcState(%d, %s)" % (
@@ -214,7 +231,7 @@ def populate_state_lists(statedir, state_names, state_ids, state_paths):
     # Read the names of the files in the directory - these are state names
     # We want these to be case-insensitive, so we're converting them all to
     # upper-case.    
-    current_state_id = 0
+    current_state_id = 1
     
     die_due_to_encoding = dict()
     
@@ -232,7 +249,10 @@ def populate_state_lists(statedir, state_names, state_ids, state_paths):
             print '! WARNING:',
             print 'Ignoring %s (ignore list)' % state_name
             continue
-        print current_state_id, state_name
+        if state_name in RESERVED_STATES:
+            print "!!! ERROR: State name %s is reserved" % state_name
+            exit(1)
+        #print current_state_id, state_name
         state_path = os.path.join(statedir, statefile)
         state_names.append(state_name)
         state_paths.append(state_path)
@@ -254,10 +274,10 @@ def populate_state_lists(statedir, state_names, state_ids, state_paths):
                 statefile
             )
         exit(1)
-        
 
 def read_state_defs(state_paths, allow_implicit):
-    for state_id in range(len(state_paths)):
+    st_objects = []
+    for state_id in range(1,len(state_paths)):
         state_path = state_paths[state_id]
         state_definition = []
         line_number = 0
@@ -270,8 +290,18 @@ def read_state_defs(state_paths, allow_implicit):
                 state_definition.append(row)
         state = QcState(state_id, state_names[state_id], allow_implicit,
                         definition_list=state_definition)
-        states_objects.append(state)
-    return states_objects
+        st_objects.append(state)
+    return st_objects
+
+def mk_post():
+    post_definition_list = [
+        {'Input_type': 'ENTER', 'Input_detail': '', 'Result_type': 'OTHER',
+         'Result_detail': 'POST', 'Result_duration': '', 'Choice_share': ''},
+        {'Input_type': 'CONTD', 'Input_detail': '',
+         'Result_type': 'STATE_TRANSITION', 'Result_detail': 'FIRSTBOOT',
+         'Result_duration': '', 'Choice_share': ''},
+    ]
+    return QcState(0, 'POST', False, definition_list=post_definition_list)
 
 def get_graph(statedir, allow_implicit):
     global state_names # Mapping of state IDs to names
@@ -279,18 +309,31 @@ def get_graph(statedir, allow_implicit):
     global states_objects # Mapping of state IDs to state objects
     state_paths = [] # Mapping of state IDs to paths
     
+    # Create the initial POST state, to start with:
+    post_state = mk_post()
+    state_names.append('POST')
+    state_ids['POST'] = 0
+    states_objects.append(post_state)
+    state_paths.append(None)
+    
     # Get the initial names, IDs, and file paths of all state definitions:
     populate_state_lists(statedir, state_names, state_ids, state_paths)
     
     # Read the state CSV files into a list:
-    states_objects = read_state_defs(state_paths, allow_implicit)
+    states_objects += read_state_defs(state_paths, allow_implicit)
+    # TODO: process the GLOBAL definition to superimpose on relevant states
+    
+    # Now, add the special POP state:
+    QcState.pop_state_id = len(state_names)
+    pop_state = QcState(QcState.pop_state_id, 'POP', allow_implicit)
+    state_names.append('POP')
+    state_ids['POP'] = QcState.pop_state_id
+    states_objects.append(pop_state)
+    state_paths.append(None)
     
     # Finally, process each state's definition into the canonical object form:
     for state in states_objects:
         state.process_definition()
-    for state in states_objects:
-        print state
-        
     # Now we're going to build our pretty graph.
     state_graph = nx.MultiDiGraph()
     
@@ -298,13 +341,14 @@ def get_graph(statedir, allow_implicit):
         # Add all the states (nodes):
         state_graph.add_node(state)
     for state in states_objects:
+        if state.name in SPECIAL_STATES: continue
         for input_tuple, action_set in state.actionsets.items():
             for action_choice in action_set:
+                if action_choice.dest_state == state: continue
                 state_graph.add_edge(state, action_choice.dest_state,
                                      object=action_choice,
                                      label=action_choice.label_tuple())
-    nx.drawing.nx_pydot.write_dot(state_graph, 'out.dot')
-    
+    return state_graph
 
 def main():
     parser = argparse.ArgumentParser("Parse the state data for a qc15 badge.")
@@ -313,7 +357,13 @@ def main():
     parser.add_argument('--default-duration', type=int, default=5,
         help="The default duration of actions whose durations are unspecified.")
     parser.add_argument('--allow-implicit', action='store_true',
-                        help='Allow the implicit declaration of states.')
+                        help='Allow the implicit declaration of states. This'\
+                             ' is almost certainly NOT what you want to do for'\
+                             " the production badge, but during development it"\
+                             " might be useful. This will generate a dead-end"\
+                             " state that automatically displays its name and"\
+                             " returns to the previous state after the default"\
+                             " delay.")
     
     args = parser.parse_args()
     
@@ -322,7 +372,8 @@ def main():
     global default_duration
     default_duration = args.default_duration
     
-    get_graph(args.statedir, args.allow_implicit)
+    state_graph = get_graph(args.statedir, args.allow_implicit)
+    nx.drawing.nx_pydot.write_dot(state_graph, 'out.dot')
     
 if __name__ == "__main__":
     main()
