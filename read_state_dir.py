@@ -341,7 +341,7 @@ def get_graph(statedir, allow_implicit):
         # Add all the states (nodes):
         state_graph.add_node(state)
     for state in states_objects:
-        if state.name in SPECIAL_STATES: continue
+        #if state.name in SPECIAL_STATES: continue
         for input_tuple, action_set in state.actionsets.items():
             for action_choice in action_set:
                 if action_choice.dest_state == state: continue
