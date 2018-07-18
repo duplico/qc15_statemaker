@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import argparse
 import os
 import csv
@@ -23,11 +25,15 @@ from chardet.universaldetector import UniversalDetector
 # The results list (if longer than 1 item) will be denoted by the special
 #  CONTD input type.
 
+REQUIRED_HEADINGS = ['Input_type', 'Input_detail', 'Choice_share', 
+                     'Result_duration', 'Result_type', 'Result_detail']
+
 IGNORE_STATES = ['EXAMPLE_NOTPARSED', 'SHEETNAMES']
 VALID_INPUT_TYPES = ['ENTER', 'USER_IN', 'BUTTON', 'NET', 'TIMER', 'TIMER_R',
                      'CONTD']
+IGNORE_INPUT_TYPES = ['', 'COMMENT', 'ACTIONS']
 VALID_RESULT_TYPES = ['TEXT', 'SET_ANIM_TEMP', 'SET_ANIM_BG', 
-                      'STATE_TRANSITION', 'OTHER']
+                      'STATE_TRANSITION', 'OTHER', 'CLOSE', 'POP']
 RESERVED_STATES = ['POP', 'POST']
 SPECIAL_STATES = ['POP', 'GLOBAL']
 default_duration = 5
@@ -61,7 +67,10 @@ class ActionChoice(object):
                     'Duplicate STATE_TRANSITIONs are not allowed.',
                     action_line
                 )
-            self.dest_state = states_objects[state_ids[results_tuple[1]]]
+            print(results_tuple)
+            print(state_ids)
+            print(states_objects)
+            self.dest_state = states_objects[state_ids[results_tuple[1].upper()]]
         
         self.results_list.append(results_tuple)
     
@@ -74,7 +83,7 @@ class ActionChoice(object):
             )
         if self.results_list and self.results_list[-1][0] == 'STATE_TRANSITION':
             self.state.error(
-                'STATE_TRANSITION must be last in its action choice.',
+                'STATE_TRANSITION must be last in its action series.',
                 action_line
             )
         
@@ -90,14 +99,14 @@ class ActionChoice(object):
             pass
         elif action_line['Result_type'] == 'STATE_TRANSITION':
             # Check that it's a valid state.
-            if action_line['Result_detail'] not in state_names:
+            if action_line['Result_detail'].upper() not in state_names:
                 # We've encountered a state transition to an undefined state.
-                s = action_line['Result_detail']
+                s = action_line['Result_detail'].upper()
                 if self.state.allow_implicit:
                     # Declare it implicitly for development purposes.
-                    print '! WARNING: Implicit declaration of state %s' % s
-                    print "  This is probably NOT what you want to do for the"\
-                    " production badge."
+                    print('! WARNING: Implicit declaration of state %s' % s)
+                    print("  This is probably NOT what you want to do for the"\
+                    " production badge.")
                     
                     imp_definition_list = [
                         {'Input_type': 'ENTER', 'Input_detail': '',
@@ -170,6 +179,7 @@ class QcState(object):
         )
         
         if input_tuple[0] == 'CONTD':
+            # TODO: results lists are now called "action series"
             # We're going to be appending this to the results list of the
             #  working action choice.
             if not self.working_input_tuple:
@@ -195,10 +205,10 @@ class QcState(object):
         working_action_choice.add_results_line(action_line)
             
     def error(self, message, action_line=None):
-        print '!!! ERROR while parsing state %s:' % self.name
-        print '\t%s' % message
+        print('FATAL while parsing state %s:' % self.name)
+        print('\t%s' % message)
         if action_line:
-            print '\tOffending details are: %s' % str(action_line)
+            print('\tOffending details are: %s' % str(action_line))
         exit(1)
         
     def choice_total(self, input_tuple):
@@ -227,70 +237,70 @@ class QcState(object):
             #repr(self.actionset)
         )
 
-def populate_state_lists(statedir, state_names, state_ids, state_paths):
-    # Read the names of the files in the directory - these are state names
-    # We want these to be case-insensitive, so we're converting them all to
-    # upper-case.    
-    current_state_id = 1
-    
-    die_due_to_encoding = dict()
-    
-    for statefile in map(lambda a: a.upper(), os.listdir(statedir)):
-        if not statefile.endswith('.CSV'):
-            print '! WARNING:',
-            print 'Ignoring %s (non-CSV)' % statefile
-            continue
-        if len(statefile.split('.')) != 2:
-            print '! WARNING:',
-            print 'Ignoring %s (Wrong number of dots)' % statefile
-            continue
-        state_name = statefile.split('.')[0]
-        if state_name in IGNORE_STATES:
-            print '! WARNING:',
-            print 'Ignoring %s (ignore list)' % state_name
-            continue
-        if state_name in RESERVED_STATES:
-            print "!!! ERROR: State name %s is reserved" % state_name
-            exit(1)
-        #print current_state_id, state_name
-        state_path = os.path.join(statedir, statefile)
-        state_names.append(state_name)
-        state_paths.append(state_path)
-        state_ids[state_name] = current_state_id
-        current_state_id += 1
-        
-        # Check encoding:
-        det = UniversalDetector()
-        for line in open(state_path):
-            det.feed(line)
-            if det.done: break
-        det.close()
-        if det.result['encoding'] != 'ascii':
-            die_due_to_encoding[statefile] = det.result['encoding']
-    if die_due_to_encoding:
-        for statefile, encoding in die_due_to_encoding.items():
-            print '!!! ERROR: Non-ASCII encoding %s detected in file %s' % (
-                encoding,
-                statefile
-            )
-        exit(1)
-
-def read_state_defs(state_paths, allow_implicit):
+def read_state_defs(statefile, allow_implicit):
     st_objects = []
-    for state_id in range(1,len(state_paths)):
-        state_path = state_paths[state_id]
-        state_definition = []
-        line_number = 0
+    state_definition = []
+    curr_state_id = 0 # 0 is the special POST state
+    curr_state_name = None
+    row_number = 1
+    with open(statefile) as csvfile:
+        csvreader = csv.DictReader(csvfile)
         
-        with open(state_path) as csvfile:
-            csvreader = csv.DictReader(csvfile)
-            for row in csvreader:
-                assert row['Input_type'] in VALID_INPUT_TYPES
-                assert row['Result_type'] in VALID_RESULT_TYPES
-                state_definition.append(row)
-        state = QcState(state_id, state_names[state_id], allow_implicit,
-                        definition_list=state_definition)
-        st_objects.append(state)
+        for required_heading in REQUIRED_HEADINGS:
+            if required_heading not in csvreader.fieldnames:
+                print("FATAL: %s:%d" % (statefile, 1))
+                print(" Required heading '%s' not found." % required_heading)
+                exit(1)
+                
+        for row in csvreader:
+            row_number += 1
+            if row['Input_type'] in IGNORE_INPUT_TYPES:
+                continue # Skip blank lines, or ones that start with COMMENT or ACTIONS
+            if curr_state_id == 0 and row['Input_type'] != 'START_STATE':
+                print("FATAL: %s:%d" % (statefile, row_number))
+                print(','.join(row.values()))
+                print("^~~~~~~ Input type not allowed without STATE_START first")
+                exit(1)
+            if row['Input_type'] == 'START_STATE':
+                # New state.
+                if curr_state_id:
+                    # Save the current state.                    
+                    state_names.append(curr_state_name)
+                    state_ids[curr_state_name] = curr_state_id
+                    state = QcState(curr_state_id, curr_state_name, allow_implicit,
+                                    definition_list=state_definition)
+                    st_objects.append(state)
+                state_definition = []
+                curr_state_id += 1
+                curr_state_name = row['Input_detail'].upper()
+                if curr_state_name in state_names:
+                    print("FATAL: %s:%d" % (statefile, row_number))
+                    print(','.join(row.values()))
+                    print((" "*(len(row['Input_type'])+2)) + \
+                          "^~~~~~~ Duplicate state definition")
+                    exit(1)
+                continue
+            if row['Input_type'] not in VALID_INPUT_TYPES:
+                print("FATAL: %s:%d" % (statefile, row_number))
+                print(','.join(row.values()))
+                print("^~~~~~~ Unknown input type '%s'" % row['Input_type'])
+                exit(1)
+            if row['Result_type'] not in VALID_RESULT_TYPES:
+                    print("FATAL: %s:%d" % (statefile, row_number))
+                    print(','.join(row.values()))
+                    print((" "*(len(row['Input_type'])+2)) + \
+                          "^~~~~~~ Unknown result type '%s'" % str(row['Result_type']))
+                    exit(1)
+            state_definition.append(row)
+        
+        # Save the final state:
+        if curr_state_id:
+            # Save the current state.                    
+            state_names.append(curr_state_name)
+            state_ids[curr_state_name] = curr_state_id
+            state = QcState(curr_state_id, curr_state_name, allow_implicit,
+                            definition_list=state_definition)
+            st_objects.append(state)
     return st_objects
 
 def mk_post():
@@ -303,33 +313,34 @@ def mk_post():
     ]
     return QcState(0, 'POST', False, definition_list=post_definition_list)
 
-def get_graph(statedir, allow_implicit):
+def get_graph(statefile, allow_implicit):
     global state_names # Mapping of state IDs to names
     global state_ids # Mapping of state names to IDs
     global states_objects # Mapping of state IDs to state objects
-    state_paths = [] # Mapping of state IDs to paths
     
     # Create the initial POST state, to start with:
     post_state = mk_post()
     state_names.append('POST')
     state_ids['POST'] = 0
     states_objects.append(post_state)
-    state_paths.append(None)
     
-    # Get the initial names, IDs, and file paths of all state definitions:
-    populate_state_lists(statedir, state_names, state_ids, state_paths)
+    # Validate the statefile:
+    #  Must end with .csv:
+    if not statefile.upper().endswith('.CSV'):
+        print("ERROR: statefile is non-CSV")
+        exit(1)
+    #  Must be ASCII-encoded
+    det = UniversalDetector()
+    for line in open(statefile):
+        det.feed(line)
+        if det.done: break
+    det.close()
+    if det.result['encoding'] != 'ascii':
+        print("ERROR: Non-ASCII encoding %s detected" % det.result['encoding'])
+        exit(1)
     
-    # Read the state CSV files into a list:
-    states_objects += read_state_defs(state_paths, allow_implicit)
-    # TODO: process the GLOBAL definition to superimpose on relevant states
-    
-    # Now, add the special POP state:
-    QcState.pop_state_id = len(state_names)
-    pop_state = QcState(QcState.pop_state_id, 'POP', allow_implicit)
-    state_names.append('POP')
-    state_ids['POP'] = QcState.pop_state_id
-    states_objects.append(pop_state)
-    state_paths.append(None)
+    # Now actually read the state file:    
+    states_objects += read_state_defs(statefile, allow_implicit)
     
     # Finally, process each state's definition into the canonical object form:
     for state in states_objects:
@@ -352,8 +363,8 @@ def get_graph(statedir, allow_implicit):
 
 def main():
     parser = argparse.ArgumentParser("Parse the state data for a qc15 badge.")
-    parser.add_argument('--statedir', type=str, default='state_files', 
-        help="Directory containing all the states' CSV files.")
+    parser.add_argument('--statefile', type=str, default='state_file.csv', 
+        help="Path to CSV file containing all the states for the game.")        
     parser.add_argument('--default-duration', type=int, default=5,
         help="The default duration of actions whose durations are unspecified.")
     parser.add_argument('--allow-implicit', action='store_true',
@@ -367,12 +378,12 @@ def main():
     
     args = parser.parse_args()
     
-    assert os.path.isdir(args.statedir)
+    assert os.path.isfile(args.statefile)
     
     global default_duration
     default_duration = args.default_duration
     
-    state_graph = get_graph(args.statedir, args.allow_implicit)
+    state_graph = get_graph(args.statefile, args.allow_implicit)
     nx.drawing.nx_pydot.write_dot(state_graph, 'out.dot')
     
 if __name__ == "__main__":
