@@ -1,8 +1,3 @@
-TODO:
-    $username
-    $badgname
-    NOP
-
 Introduction
 ============
 
@@ -22,6 +17,7 @@ State diagram generation
 Intermediate code generation 
     Generate code readable by the on-badge interpreter, in Intel Hex format.
                 
+
 The Specification Language
 ==========================
 
