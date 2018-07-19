@@ -1,0 +1,62 @@
+State characteristics:
+name: name of the state (will be used to produce a unique ID)
+transition_table: all the causes/effects of stuff in this state
+
+Transition table
+================
+Input_type	Input_detail	Result_type	Result_detail	Result_duration	Choice_share
+
+There is likely also going to be a GLOBAL state transition table,
+which will be logically combined with each state's local table,
+possibly in a maskable fashion.
+
+Input types:
+STATE_INPUT_ENTER 	State is entered
+					Input_detail is ignored 
+STATE_INPUT_USER_IN The user selected an option from the input screen.
+					Input_detail: the text of the option
+STATE_INPUT_BUTTON 	AVOID USING IN FAVOR OF STATE_INPUT_USER_IN!
+					A button was pressed (this will likely get more complicated)
+					Input_detail contains button ID
+STATE_INPUT_NET		Something happened over the network
+					Input_detail is the ID of the radio event
+					(we'll decide what these are soon. Meantime, just
+					 put a consistent description in the detail field)
+STATE_INPUT_TIMER	A fixed delay after the 
+STATE_INPUT_TIMER_R	A recurring timer
+STATE_INPUT_CONTD	This entry continues a LIST of results of the above trigger
+
+If there are multiple identical (Input_type,Input_detail) pairs, then ties
+will be broken probabilistically using Choice_share as its proportional
+likelihood of being selected.
+
+Result types:
+RESULT_TEXT:
+	Display a text message, possibly in a series, disappearing after the delay.
+	Result_detail contains the message text. 
+RESULT_SET_ANIM_TEMP:
+	Display an animation on the LEDs, returning to the ambient once finished.
+	Result_detail contains the name of the animation (which will map to IDs)
+RESULT_SET_ANIM_BG:
+	Set a new ambient animation, which will change once the 
+	Result_detail contains the name of the animation (which will map to IDs)
+RESULT_STATE_TRANSITION
+	Transition to a new state
+RESULT_OTHER
+	Something else. Use this as a placeholder, and use the detail field to
+	describe the details, but we'll ultimately create result events for all of 
+	the possible effects, eventually.
+	
+NOP
+    No operation
+POP
+    Return to previous state
+CLOSE_STATE
+    Blocks off the current state
+    
+Delay_duration:
+	the length in seconds after a result occurs before the
+	next result in the list is allowed to fire.
+	Special options:
+		DELAY_DEFAULT: 	The default delay length (may be different for different result types)
+		DELAY_NONE:		Continue instantly (no delay)
