@@ -1,3 +1,8 @@
+TODO:
+    $username
+    $badgname
+    NOP
+
 Introduction
 ============
 
@@ -78,6 +83,15 @@ The following events are supported:
     never connected to our badge before has initiated a connection; or
     ``MoreThanTenBadgesNearby`` might refer to a situation where the number of
     badges nearby has increased above 10.
+    
+``NOP``
+    No operation: use this to signify that no event should occur. This is
+    provided primarily to allow certain choice share events to be implemented
+    in an "all or nothing" fashion. That is, a timer might have two action
+    sequence choices in its choice set: a rare state transition event with a
+    choice share of 1, and a ``NOP`` with a choice share of 9. In this
+    configuration, when the timer fires there is a 1 in 10 chance of the rare
+    state transition firing, and a 90% chance that nothing will happen.
     
 Special Input_types
 ~~~~~~~~~~~~~~~~~~~
@@ -220,7 +234,7 @@ a choice set being executed upon the invocation of its event is equal to the
 action sequence's choice share, divided by the total of every choice share of 
 every action sequence in the choice set.
 
-For example, if an event (``Input_type``, ``Input_detail``) of (TIMER, 20) 
+For example, if an event (``Input_type``, ``Input_detail``) of (``TIMER``, ``20``) 
 appears three times in a state, like so::
 
     Input_type, Input_detail, Choice_share, Result_type, Result_detail
@@ -235,12 +249,20 @@ the choice shares for the choice set is 8, so each action sequence's odds of
 being executed upon the timer firing is its choice share (1, 2, or 5) divided
 by 8.
 
-TEXT Expansion
-~~~~~~~~~~~~~~
+The ``TEXT`` Action
+-------------------
+
+The ``TEXT`` action is a special action with many extra features, compared to
+the other action types. Below is a list of the special features that ``TEXT``
+can use.
 
 As introduced above, ``TEXT`` actions have a special set of combination types.
 The first is long text automatic sequence generation. The second is alternative
-automatic choice set generation.
+automatic choice set generation. It also allows limited use of variable
+expressions in its text detail string.
+
+Automatic sequence generation (word wrap)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 In a text action type, the ``Action_detail`` contains the actual text that the
 badge will display. Because the badge's screens only have 24 characters, and
@@ -251,6 +273,9 @@ as if a series of ``CONTD`` input types had been applied to break the text up.
 Automatic TEXT action sequences MAY have an alternative display behavior, such
 as a shorter pause, or different typing behavior, depending on the
 implementation details.
+
+Automatic choice set generation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Additionally, to provide more variety for text responses, a TEXT action may
 have more than one possible string to display. Alternate text for a TEXT action
@@ -263,3 +288,33 @@ sequences out of the alternate text options, and then (2) aggregates those
 sequences into a special kind of choice set, with evenly weighted choice shares,
 so that one of the options - regardless of its length - will be chosen when
 that text action is reached.
+
+Variable substitution
+~~~~~~~~~~~~~~~~~~~~~
+
+The following variable names are permitted in ``TEXT`` result detail fields,
+and will be dynamically substituted by the badge upon display. Note that the
+TEXT result type is the ONLY result type for which variables are allowed.
+
+Allowed variables:
+
+``$badgname``
+    (Note that there is no "e" in ``badg``.) This is substituted with the
+    pre-assigned name of the badge.
+    
+``$username``
+    This is substituted with the user's entered name, or an empty string if
+    the name hasn't been set yet.
+    
+The following variables CAN be implemented, but aren't. Please don't ask for
+more than a small number of them:
+
+* Badge ID
+* ID of badge's first code part (0, 6, 12, ... 90)
+    * Or, badge code segment ID (0, 1, .. 15)
+* Total badges seen (or downloaded from, or uploaded to)
+* Total uber badges seen (or downloaded from, or uploaded to)
+* Total handler badges seen (or downloaded from, or uploaded to)
+* How many hours (or minutes, or seconds) into Queercon/DEF CON the badge thinks
+    we are.
+* Current animation/flag name (probably)
