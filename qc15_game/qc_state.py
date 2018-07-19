@@ -46,7 +46,6 @@ class ActionChoice(object):
                 all_text_options,
                 results_tuple[2]
             )
-            print(all_text_options)
         self.results_list.append(results_tuple)
     
     def validate_line(self, action_line, result):
