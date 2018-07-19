@@ -1,6 +1,0 @@
-Input_type,Input_detail,Result_type,Result_detail,Result_duration,Choice_share,Comment
-TIMER,8,STATE_TRANSITION,FIRSTBOOT,,,First entry to the state
-USER_IN,Turn on a light,TEXT,A light? Hrmm...,,,
-CONTD,,SET_ANIM_BG,White full,,,
-CONTD,,TEXT,Woohoo! I did that!,,,
-CONTD,,STATE_TRANSITION,LIGHTSON,,,

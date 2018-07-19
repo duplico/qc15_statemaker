@@ -1,3 +1,0 @@
-Input_type,Input_detail,Result_type,Result_detail,Result_duration,Choice_share,Comment
-ENTER,,TEXT,Zzzzzzz,,,First entry to the state
-USER_IN,,STATE_TRANSITION,FIRSTBOOT,,,

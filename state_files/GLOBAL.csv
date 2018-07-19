@@ -1,8 +1,0 @@
-Input_type,Input_detail,Result_type,Result_detail,Result_duration,Choice_share,Comment
-USER_IN,Go to sleep,TEXT,""Oh, okay."",,1,
-CONTD,,STATE_TRANSITION,SLEEP,,,
-NET,Other badge connection,TEXT,"WHAT THE HELL IS THAT?",,,
-NET,Nearby badges from 0 to 1,TEXT,"Something's out there...",,1,
-NET,Nearby badges from 0 to 2,TEXT,"I'm not alone.",,1,
-NET,Nearby badges from 0 to 3,TEXT,"Who's out there?",,1,
-NET,Nearby badges from 0 to 4,TEXT,"This is weird.",,1,
