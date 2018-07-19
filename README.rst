@@ -312,5 +312,5 @@ more than a small number of them:
 * Total uber badges seen (or downloaded from, or uploaded to)
 * Total handler badges seen (or downloaded from, or uploaded to)
 * How many hours (or minutes, or seconds) into Queercon/DEF CON the badge thinks
-    we are.
+we are.
 * Current animation/flag name (probably)
