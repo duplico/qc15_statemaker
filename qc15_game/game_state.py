@@ -173,8 +173,10 @@ class GameAction(object):
             
             if '$badgname' in frame:
                 frame.replace('$badgname', '%s', 1)
+                action_type = 'TEXT_BADGEVAR'
             elif '$username' in frame:
                 frame.replace('$badgname', '%s', 1)
+                action_type = 'TEXT_USERVAR'
             
             new_action = GameAction(input_tuple, state_name, prev_action,
                                     prev_choice, action_type=action_type,
