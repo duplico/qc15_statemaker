@@ -17,7 +17,53 @@ State diagram generation
 Intermediate code generation 
     Generate code readable by the on-badge interpreter, in Intel Hex format.
                 
+Running statemaker
+==================
 
+Invocation
+~~~~~~~~~~
+
+The invocation of statemaker is as follows::
+
+    python statemaker.py  [-h] [--statefile STATEFILE]
+                          [--default-duration DEFAULT_DURATION]
+                          [--allow-implicit] [-d DOTFILE]
+                          
+    optional arguments:
+      -h, --help            show this help message and exit
+      --statefile STATEFILE
+                            Path to CSV file containing all the states for the
+                            game. Defaults to 
+      --default-duration DEFAULT_DURATION
+                            The default duration of actions whose durations are
+                            unspecified. Default is 0.
+      --allow-implicit      Allow the implicit declaration of states. This is
+                            almost certainly NOT what you want to do for the
+                            production badge, but during development it might be
+                            useful. This will generate a dead-end state that
+                            automatically displays its name and returns to the
+                            previous state after the default delay.
+      -d DOTFILE, --dotfile DOTFILE
+                            Path to GraphViz dot file to generate.
+
+Implicit State Declaration
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Implicit State Declaration is not currently supported. Sorry.
+
+Dependencies
+~~~~~~~~~~~~
+
+A ``requirements.txt`` file is provided. The following packages are required
+to run statemaker:
+
+* NetworkX <https://pypi.org/project/networkx/>
+* pydot <https://pypi.org/project/pydot/>, a requirement for NetworkX
+* Chardet <https://pypi.org/project/chardet/>
+* intelhex <https://pypi.org/project/IntelHex/>
+
+Furthermore, in order to generate state graphs, GraphViz must be installed.
+                
 The Specification Language
 ==========================
 
@@ -299,7 +345,7 @@ Allowed variables:
     pre-assigned name of the badge.
     
 ``$username``
-    This is substituted with the user's entered name, or an empty string if
+    This is substituted with the user's entered name, or "human" if
     the name hasn't been set yet.
     
 The following variables CAN be implemented, but aren't. Please don't ask for
