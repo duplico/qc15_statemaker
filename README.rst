@@ -337,9 +337,19 @@ Variable substitution
 The following variable names are permitted in ``TEXT`` result detail fields,
 and will be dynamically substituted by the badge upon display. Note that the
 TEXT result type is the ONLY result type for which variables are allowed, and
-ONLY ONE variable is allowed per TEXT result.
+ONLY ONE reference to ONLY ONE variable is allowed per ``TEXT`` result. However, 
+if the text action is broken into multiple lines (manually, or automatically), 
+or multiple choices (manually through explicit choice sets, or through using
+extra columns), each line of each choice is considered separately. 
 
-Allowed variables:
+That is, a single text action may not display more than one variable, and it 
+may not display more than one copy of a single variable. But if that text
+action is broken into multiple lines, each line may include a single variable,
+which may be a different variable from the other lines. Similarly, if multiple
+choices for the text are supplied using extra columns in the spreadsheet, then
+each line of each choice may use a single variable, as well.
+
+The following variables are currently implemented:
 
 ``$badgname``
     (Note that there is no "e" in ``badg``.) This is substituted with the
