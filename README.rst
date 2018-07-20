@@ -336,7 +336,8 @@ Variable substitution
 
 The following variable names are permitted in ``TEXT`` result detail fields,
 and will be dynamically substituted by the badge upon display. Note that the
-TEXT result type is the ONLY result type for which variables are allowed.
+TEXT result type is the ONLY result type for which variables are allowed, and
+ONLY ONE variable is allowed per TEXT result.
 
 Allowed variables:
 
