@@ -96,7 +96,7 @@ The pair of those two fields is called an *Input tuple*.
 The following events are supported:
 
 ``ENTER``
-    A state is entered. ``Input_detail`` is ignored.
+    A state is entered. ``Input_detail`` MUST be blank.
     
 ``USER_IN``
     The user selects an option on their menu on the bottom screen on the badge.
