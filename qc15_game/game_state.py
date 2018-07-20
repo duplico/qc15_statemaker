@@ -54,6 +54,7 @@ class GameAction(object):
             while previous_choice:
                 self.choice_total += previous_choice.choice_share
                 previous_choice.choice_total += self.choice_share
+                previous_choice = previous_choice.prev_choice
         
         # If we're in an action sequence, we need to tell the existing last
         #  element of that sequence that we come next.
@@ -81,13 +82,16 @@ class GameAction(object):
         return last_choice.prev_action
         
     @staticmethod
-    def create_from_row(input_tuple, state_name, prev_action, prev_choice, row):
+    def create_from_row(input_tuple, state, prev_action, prev_choice, row):
         # TODO: Consider permitting implicit state definition again.
         # TODO: Handle the integer versions
         # TODO: Handle state transitions
         if row['Result_type'] != 'TEXT':
-            return GameAction(input_tuple, state_name, prev_action, 
-                              prev_choice, row=row)
+            action =  GameAction(input_tuple, state.name, prev_action, 
+                                 prev_choice, row=row)
+            if input_tuple not in state.events:
+                state.events[input_tuple] = action
+            return action
         # If we've gotten to this point, that means ... drumroll...
         # We're dealing with a TEXT row!
         
@@ -98,7 +102,7 @@ class GameAction(object):
         # We definitely need to generate the first action series. 
         first_action, last_action = GameAction.create_text_action_seq(
             input_tuple, 
-            state_name, 
+            state.name, 
             prev_action, 
             prev_choice, 
             row['Result_detail'],
@@ -107,6 +111,12 @@ class GameAction(object):
         )
         
         # This gave us two actions, which may be the same as each other.        
+        
+        
+        # See if this needs to be attached directly to an event:        
+        if input_tuple not in state.events:
+            # If so, we need to add the very first event in this chain.
+            state.events[input_tuple] = first_action
         
         if (0 not in row) or (not row[0]):
             # If this is the only column, we're done. Time to return
@@ -124,13 +134,15 @@ class GameAction(object):
         #  generator function that called us can link additional actions to
         #  it, as needed.
         choices_generated = [(first_action, last_action)]
-        
+                
         for i in range(GameAction.max_extra_details):
+            if not row[i]:
+                break
             # i = index of previous choice in choices_generated
             # Each choice should link its first action to the previous choice
             f, l = GameAction.create_text_action_seq(
                 input_tuple, 
-                state_name, 
+                state.name, 
                 None, # Previous action is reached through the choice set.
                 choices_generated[i][0], # Wire the first actions together.
                 row[i],
@@ -138,7 +150,7 @@ class GameAction(object):
                 choice_share
             )
             choices_generated.append((f, l))
-        
+                
         # Since we're down here, it means we generated more than one choice.
         #  There's one final step to get everything working. We need to add a
         #  NOP action to aggregate all those choices back together to able
@@ -148,7 +160,7 @@ class GameAction(object):
         # We leave the prev_action (which this will have as a stand-in) out of
         #  the constructor, because we don't want to trigger the automatic
         #  linking logic.
-        nop_aggregator = GameAction(input_tuple, state_name, None, None,
+        nop_aggregator = GameAction(input_tuple, state.name, None, None,
                                     action_type='NOP', detail='', duration=0,
                                     choice_share=1)
         nop_aggregator.prev_action = choices_generated[0][1]
@@ -167,20 +179,24 @@ class GameAction(object):
         prev_action = None
         text_frames = textwrap.wrap(detail, 24)
         if not text_frames:
-            text_frames.append('')
+            text_frames.append(' ')
         for frame in text_frames:
             action_type = 'TEXT'
+            frame_text = frame
+            
+            # TODO: Validate the single variable constraint.
             
             if '$badgname' in frame:
-                frame.replace('$badgname', '%s', 1)
+                frame_text = frame.replace('$badgname', '%s', 1)
                 action_type = 'TEXT_BADGEVAR'
             elif '$username' in frame:
-                frame.replace('$badgname', '%s', 1)
+                frame_text = frame.replace('$badgname', '%s', 1)
                 action_type = 'TEXT_USERVAR'
             
             new_action = GameAction(input_tuple, state_name, prev_action,
                                     prev_choice, action_type=action_type,
-                                    detail=frame, duration=duration)
+                                    detail=frame_text, duration=duration,
+                                    choice_share=choice_share)
             prev_action = new_action
             if not first_action:
                 first_action = new_action
@@ -195,6 +211,13 @@ class GameAction(object):
         return '%s%s %s' % (self.action_type, ':' if self.detail else '',
                             str(self.detail))
         
+    def __repr__(self):
+        return self.__str__()
+        
+    def struct_text(self):
+        ret = ""
+        pass
+        
 class GameState(object):
     next_id = 0
     def __init__(self, name):
@@ -206,8 +229,59 @@ class GameState(object):
         all_states.append(self)
         state_name_ids[self.name] = self.id
         
+    def timers(self):
+        timers = []
+        recurring_timers = []
+        for input_tuple, action in self.events.items():
+            if input_tuple[0] == 'TIMER_R':
+                recurring_timers.append((input_tuple, action))
+            elif input_tuple[0] == 'TIMER':
+                timers.append((input_tuple, action))
+        
+        # Now sort them. We need LONGEST FIRST within each list,
+        #  then to append the lists, with non-recurring first.
+        reverse_by_duration = lambda a: -int(a[0][1])
+        timers.sort(key=reverse_by_duration)
+        recurring_timers.sort(key=reverse_by_duration)
+        
+        return timers + recurring_timers
+        
+    def user_ins(self):
+        return [(input_tuple, action) for (input_tuple, action) in self.events.items() if input_tuple[0] == 'USER_IN']
+    
+        # TODO: delete:
+        # user_inputs = []
+        
+        # for input_tuple, action in self.events.items():
+            # if input_tuple[0] == 'USER_IN':
+                # user_inputs.append((input_tuple, action))
+        
+        # return user_inputs
+        
+    def entry_series(self):
+        
+        return self.events.get(('ENTER', ''), None)
+        
     def __str__(self):
         return self.name
+        
+    def __repr__(self):
+        return self.__str__()
+        
+    def struct_text(self):
+        """
+        typedef struct {
+            // TODO: this id shouldn't be here.
+            uint8_t id;
+            uint16_t entry_series_id;
+            uint8_t timer_series_len;
+            game_timer_t timer_series[5];
+            uint8_t input_series_len;
+            game_user_in_t input_series[5];
+        } game_state_t;
+        """
+        ret = ""
+        pass
         
 def read_state_data(statefile, allow_implicit):
 
@@ -265,12 +339,20 @@ def read_state_data(statefile, allow_implicit):
                 print(','.join(row.values()))
                 print("^~~~~~~ Unknown input type '%s'" % row['Input_type'])
                 exit(1)
+            
             if row['Result_type'] not in VALID_RESULT_TYPES:
-                    print("FATAL: %s:%d" % (statefile, row_number))
-                    print(','.join(row.values()))
-                    print((" "*(len(row['Input_type'])+len(row['Input_detail'])+len(row['Choice_share'])+len(row['Result_duration'])+2)) + \
-                          "^~~~~~~ Unknown result type '%s'" % str(row['Result_type']))
-                    exit(1)
+                print("FATAL: %s:%d" % (statefile, row_number))
+                print(','.join(row.values()))
+                print((" "*(len(row['Input_type'])+len(row['Input_detail'])+len(row['Choice_share'])+len(row['Result_duration'])+2)) + \
+                      "^~~~~~~ Unknown result type '%s'" % str(row['Result_type']))
+                exit(1)
+            
+            if row['Input_type'] == 'ENTER' and row['Input_detail']:
+                print("FATAL: %s:%d" % (statefile, row_number))
+                print(','.join(row.values()))
+                print((" "*(len(row['Input_type'])+2)) + \
+                      "^~~~~~~ Input_detail not allowed for ENTER input types")
+                exit(1)
     
     # Now, all the explicit states have been loaded, so they all have IDs.
     # Time to process the results.
@@ -287,7 +369,7 @@ def read_state_data(statefile, allow_implicit):
         #  Now, check whether there are additional unnamed columns. If so,
         #  count them.
         if len(csvreader.fieldnames) > result_detail_index+1:
-            GameAction.max_extra_text_details = len(csvreader.fieldnames) - 1 - result_detail_index
+            GameAction.max_extra_details = len(csvreader.fieldnames) - 1 - result_detail_index
             
         # Now, for every extra column, assign it a numeric key, starting with 0.
         #  This is nice because all the other keys are always strings, so this
@@ -322,12 +404,10 @@ def read_state_data(statefile, allow_implicit):
             # We check for case 3 first.
             if row['Input_type'] == "CONTD":
                 # This is a continuation of the current action sequence.
-                # TODO: improve constructor:
-                # TODO: determine whether it's text or not.
                 # previous action is current_action, previous choice is None
                 next_action = GameAction.create_from_row(
                     current_action.input_tuple,
-                    current_state.name,
+                    current_state,
                     current_action, None,
                     row
                 )
@@ -362,7 +442,7 @@ def read_state_data(statefile, allow_implicit):
                 # Previous action is None, previous choice is current_choice.
                 next_action = GameAction.create_from_row(
                     input_tuple,
-                    current_state.name,
+                    current_state,
                     None, current_choice,
                     row
                 )
@@ -370,23 +450,19 @@ def read_state_data(statefile, allow_implicit):
                 # No previous action, no previous choice:
                 next_action = GameAction.create_from_row(
                     input_tuple, 
-                    current_state.name, 
+                    current_state, 
                     None, None, 
                     row
                 )
-                # This is case 1. We add to the state's events dictionary,
-                #  where the input tuple is the key and the new state object
-                #  is the value.
-                current_state.events[input_tuple] = next_action
             current_action = next_action
         
     # Now, build the state diagram.
     # Now we're going to build our pretty graph.
     state_graph = nx.MultiDiGraph()
     
-    for state_name in all_states:
-        state_graph.add_node(state_name)
-    
+    for state in all_states:
+        state_graph.add_node(state.name)
+        
     for action in all_actions:
         if action.action_type == 'STATE_TRANSITION':
             # We want to add an edge, but we want the label to be the action
@@ -399,5 +475,10 @@ def read_state_data(statefile, allow_implicit):
                 
             state_graph.add_edge(action.state_name, action.detail,
                                  label=str(action.input_tuple))
+    
+    for state in all_states:
+        print(state)
+        print(state.events)
+        print(state.entry_series())
     
     return state_graph
