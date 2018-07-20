@@ -13,6 +13,8 @@ all_actions = []
 all_states = []
 state_name_ids = dict()
 
+row_number = 0
+
 class GameAction(object):
     max_extra_details = 0
     
@@ -61,6 +63,23 @@ class GameAction(object):
         if self.prev_action:
             self.prev_action.next_action = self
         
+        if self.action_type == 'STATE_TRANSITION':
+            self.detail = self.detail.upper()
+            if self.detail not in state_name_ids:
+                # ERROR! Unless we're allowing implicit state declaration.
+                if GameState.allow_implicit:
+                    # Create a new game state for this transition.
+                    new_state = GameState(self.detail)
+                else:
+                    # ERROR.                    
+                    print("FATAL: %s:%d" % (statefile, row_number))
+                    if row:
+                        print(','.join(row.values()))
+                        print(" "*(len(row['Input_type'])+len(row['Input_detail'])+len(row['Choice_share'])+len(row['Result_type']+len(row['Result_duration'])+6)) + "^")
+                    print("Unknown state '%s'" % self.detail)
+                    exit(1)
+            self.detail = all_states[state_name_ids[self.detail]]
+        
     def get_previous_action(self):
         if self.prev_action:
             return self.prev_action
@@ -85,7 +104,6 @@ class GameAction(object):
     def create_from_row(input_tuple, state, prev_action, prev_choice, row):
         # TODO: Consider permitting implicit state definition again.
         # TODO: Handle the integer versions
-        # TODO: Handle state transitions
         if row['Result_type'] != 'TEXT':
             action =  GameAction(input_tuple, state.name, prev_action, 
                                  prev_choice, row=row)
@@ -220,6 +238,7 @@ class GameAction(object):
         
 class GameState(object):
     next_id = 0
+    allow_implicit = False
     def __init__(self, name):
         self.events = dict()
         self.name = name
@@ -283,12 +302,7 @@ class GameState(object):
         ret = ""
         pass
         
-def read_state_data(statefile, allow_implicit):
-
-    # First, a general validation pass with State definitions.
-    # Then we do a final pass to add actions.
-    
-    # Lex/Syntax pass:
+def read_states_and_validate(statefile):
     with open(statefile) as csvfile:
         csvreader = csv.DictReader(csvfile)
         
@@ -305,6 +319,7 @@ def read_state_data(statefile, allow_implicit):
                 print(" Expected only blank or no headings after Result_detail")
                 exit(1)
         
+        global row_number
         row_number = 0
         state_is_set = False
         
@@ -353,10 +368,8 @@ def read_state_data(statefile, allow_implicit):
                 print((" "*(len(row['Input_type'])+2)) + \
                       "^~~~~~~ Input_detail not allowed for ENTER input types")
                 exit(1)
-    
-    # Now, all the explicit states have been loaded, so they all have IDs.
-    # Time to process the results.
-    
+        
+def read_actions(statefile):
     with open(statefile) as csvfile:
         csvreader = csv.DictReader(csvfile)
         
@@ -379,6 +392,8 @@ def read_state_data(statefile, allow_implicit):
         
         # Now let's get going.
         current_state = None
+        
+        global row_number
         
         for row in csvreader:
             row_number += 1
@@ -456,6 +471,20 @@ def read_state_data(statefile, allow_implicit):
                 )
             current_action = next_action
         
+def read_state_data(statefile, allow_implicit):
+
+    GameState.allow_implicit = allow_implicit
+    
+    # First, a general validation pass with State definitions.
+    # Then we do a final pass to add actions.
+    
+    # Lex/Syntax pass:
+    read_states_and_validate(statefile)
+    
+    # Now, all the explicit states have been loaded, so they all have IDs.
+    # Time to process the results.
+    read_actions(statefile)
+        
     # Now, build the state diagram.
     # Now we're going to build our pretty graph.
     state_graph = nx.MultiDiGraph()
@@ -475,10 +504,5 @@ def read_state_data(statefile, allow_implicit):
                 
             state_graph.add_edge(action.state_name, action.detail,
                                  label=str(action.input_tuple))
-    
-    for state in all_states:
-        print(state)
-        print(state.events)
-        print(state.entry_series())
     
     return state_graph
