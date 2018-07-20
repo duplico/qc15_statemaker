@@ -1,8 +1,7 @@
 from __future__ import print_function
 
 import csv
-#TODO:
-# import textwrap
+import textwrap
 
 
 import networkx as nx
@@ -15,6 +14,8 @@ all_states = []
 state_name_ids = dict()
 
 class GameAction(object):
+    max_extra_details = 0
+    
     def __init__(self, input_tuple, state_name, prev_action, prev_choice,
                  action_type=None, detail=None, 
                  duration=None, choice_share=None, row=None):
@@ -40,14 +41,158 @@ class GameAction(object):
         self.prev_choice = prev_choice
         self.input_tuple = input_tuple
         
+        # If we're a member of a choice set, we need to link the existing 
+        #  last element to ourself, and then we should increment every other 
+        #  member's choice_total so they're all the same.
+        if self.prev_choice:
+            # Wire our previous choice up to us.
+            self.prev_choice.next_choice = self
+            # Now compute the choice total so far, also incrementing every
+            #  previous choice's total by our choice share. (which will make
+            #  them all equal, I hope I hope I hope)
+            previous_choice = self.prev_choice
+            while previous_choice:
+                self.choice_total += previous_choice.choice_share
+                previous_choice.choice_total += self.choice_share
+        
+        # If we're in an action sequence, we need to tell the existing last
+        #  element of that sequence that we come next.
+        if self.prev_action:
+            self.prev_action.next_action = self
+        
+    def get_previous_action(self):
+        if self.prev_action:
+            return self.prev_action
+        
+        last_choice = self.prev_choice
+        
+        if not last_choice:
+            # There are neither choices before us in the chain, nor an explicit
+            #  previous action. That means that we are the first in the chain,
+            #  so return None.
+            return None
+        
+        # Find the first node in the choice set linked-list:
+        while last_choice.prev_choice:
+            last_choice = last_choice.prev_choice
+        
+        # Now last_choice holds the first node in the choice set. Return its
+        #  previous action:
+        return last_choice.prev_action
+        
+    @staticmethod
+    def create_from_row(input_tuple, state_name, prev_action, prev_choice, row):
+        # TODO: Consider permitting implicit state definition again.
+        # TODO: Handle the integer versions
+        # TODO: Handle state transitions
+        if row['Result_type'] != 'TEXT':
+            return GameAction(input_tuple, state_name, prev_action, 
+                              prev_choice, row=row)
+        # If we've gotten to this point, that means ... drumroll...
+        # We're dealing with a TEXT row!
+        
+        duration = int(row['Result_duration']) if row['Result_duration'] else 0
+        choice_share = int(row['Choice_share']) if row['Choice_share'] else 1
+        
+        # This means there's a couple of extra things we need to do.
+        # We definitely need to generate the first action series. 
+        first_action, last_action = GameAction.create_text_action_seq(
+            input_tuple, 
+            state_name, 
+            prev_action, 
+            prev_choice, 
+            row['Result_detail'],
+            duration,
+            choice_share
+        )
+        
+        # This gave us two actions, which may be the same as each other.        
+        
+        if (0 not in row) or (not row[0]):
+            # If this is the only column, we're done. Time to return
+            #  last_action, which is what additional actions will need to
+            #  link to.
+            return last_action
+        
+        # If we're here it means that we have multiple text choices to deal
+        #  with. We've saved the results of our first sequence creation call.
+        #  Now we need to link some new choices to it.
+        
+        # We save first_action, because we need to link additional action
+        #  choices to it. We save last_action, because this function needs to
+        #  return the final action in an action sequence, so that the main
+        #  generator function that called us can link additional actions to
+        #  it, as needed.
+        choices_generated = [(first_action, last_action)]
+        
+        for i in range(GameAction.max_extra_details):
+            # i = index of previous choice in choices_generated
+            # Each choice should link its first action to the previous choice
+            f, l = GameAction.create_text_action_seq(
+                input_tuple, 
+                state_name, 
+                None, # Previous action is reached through the choice set.
+                choices_generated[i][0], # Wire the first actions together.
+                row[i],
+                duration,
+                choice_share
+            )
+            choices_generated.append((f, l))
+        
+        # Since we're down here, it means we generated more than one choice.
+        #  There's one final step to get everything working. We need to add a
+        #  NOP action to aggregate all those choices back together to able
+        #  single action sequence we can hand back off to the main
+        #  generation function.
+        
+        # We leave the prev_action (which this will have as a stand-in) out of
+        #  the constructor, because we don't want to trigger the automatic
+        #  linking logic.
+        nop_aggregator = GameAction(input_tuple, state_name, None, None,
+                                    action_type='NOP', detail='', duration=0,
+                                    choice_share=1)
+        nop_aggregator.prev_action = choices_generated[0][1]
+        
+        # Wire up the next action for every one of our choices' last actions
+        #  to the NOP aggregator. Then return it.
+        for (first, last) in choices_generated:
+            last.next_action = nop_aggregator
+        
+        return nop_aggregator
+        
+    @staticmethod
+    def create_text_action_seq(input_tuple, state_name, prev_action,
+                               prev_choice, detail, duration, choice_share):
+        first_action = None
+        prev_action = None
+        text_frames = textwrap.wrap(detail, 24)
+        if not text_frames:
+            text_frames.append('')
+        for frame in text_frames:
+            action_type = 'TEXT'
+            
+            if '$badgname' in frame:
+                frame.replace('$badgname', '%s', 1)
+            elif '$username' in frame:
+                frame.replace('$badgname', '%s', 1)
+            
+            new_action = GameAction(input_tuple, state_name, prev_action,
+                                    prev_choice, action_type=action_type,
+                                    detail=frame, duration=duration)
+            prev_action = new_action
+            if not first_action:
+                first_action = new_action
+                prev_choice = None
+        
+        # Now, prev_action contains the last in the chain, and first_action
+        #  contains the first. They may be the same.
+        
+        return (first_action, prev_action)
+    
     def __str__(self):
         return '%s%s %s' % (self.action_type, ':' if self.detail else '',
                             str(self.detail))
         
-class TextAction(GameAction):
-    max_extra_details = 0
-    pass
-
 class GameState(object):
     next_id = 0
     def __init__(self, name):
@@ -140,7 +285,7 @@ def read_state_data(statefile, allow_implicit):
         #  Now, check whether there are additional unnamed columns. If so,
         #  count them.
         if len(csvreader.fieldnames) > result_detail_index+1:
-            TextAction.max_extra_text_details = len(csvreader.fieldnames) - 1 - result_detail_index
+            GameAction.max_extra_text_details = len(csvreader.fieldnames) - 1 - result_detail_index
             
         # Now, for every extra column, assign it a numeric key, starting with 0.
         #  This is nice because all the other keys are always strings, so this
@@ -178,10 +323,12 @@ def read_state_data(statefile, allow_implicit):
                 # TODO: improve constructor:
                 # TODO: determine whether it's text or not.
                 # previous action is current_action, previous choice is None
-                next_action = GameAction(current_action.input_tuple, 
-                                         current_state.name, 
-                                         current_action, None, row=row)
-                current_action.next_action = next_action
+                next_action = GameAction.create_from_row(
+                    current_action.input_tuple,
+                    current_state.name,
+                    current_action, None,
+                    row
+                )
                 current_action = next_action
                 continue
             
@@ -200,9 +347,10 @@ def read_state_data(statefile, allow_implicit):
                     # If a choice share is provided, use it:
                     choice_share = int(row['Choice_share'])
                 
+                # Find the last action node in the choice set associated with
+                #  the current input tuple.
                 current_choice = current_state.events[input_tuple]
                 while True:
-                    current_choice.choice_total += current_choice_share
                     if current_choice.next_choice:
                         current_choice = current_choice.next_choice
                     else:
@@ -210,21 +358,25 @@ def read_state_data(statefile, allow_implicit):
                         #  the choice - where we need to hook our new choice up.
                         break
                 # Previous action is None, previous choice is current_choice.
-                next_action = GameAction(input_tuple, current_state.name, 
-                                         None, current_choice, row=row)
-                next_action.choice_total = current_choice.choice_total
-                current_choice.next_choice = next_action
+                next_action = GameAction.create_from_row(
+                    input_tuple,
+                    current_state.name,
+                    None, current_choice,
+                    row
+                )
             else:
                 # No previous action, no previous choice:
-                next_action = GameAction(input_tuple, current_state.name, 
-                                         None, None, row=row)
+                next_action = GameAction.create_from_row(
+                    input_tuple, 
+                    current_state.name, 
+                    None, None, 
+                    row
+                )
                 # This is case 1. We add to the state's events dictionary,
                 #  where the input tuple is the key and the new state object
                 #  is the value.
                 current_state.events[input_tuple] = next_action
             current_action = next_action
-            
-        # TODO: Consider permitting implicit state definition again.
         
     # Now, build the state diagram.
     # Now we're going to build our pretty graph.
@@ -240,8 +392,8 @@ def read_state_data(statefile, allow_implicit):
             #  transition. So we'll follow the chain back to the initial
             #  action.
             label_action = action
-            while label_action.prev_action:
-                label_action = label_action.prev_action
+            while label_action.get_previous_action():
+                label_action = label_action.get_previous_action()
                 
             state_graph.add_edge(action.state_name, action.detail,
                                  label=str(action.input_tuple))
