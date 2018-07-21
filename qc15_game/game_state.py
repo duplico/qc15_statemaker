@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+import sys
 import csv
 import textwrap
 import struct
@@ -26,18 +27,6 @@ class GameTimer(object):
         self.recurring = recurring
         self.result = result
         
-    def pack(self):
-        """
-        typedef struct {
-            /// The duration of this timer, in 1/32 of seconds.
-            uint32_t duration;
-            /// True if this timer should repeat.
-            uint8_t recurring;
-            uint16_t result_action_id;
-        } game_timer_t;
-        """
-        pass
-        
     def sort_key(self):
         # We want all one-time timers to go before recurring,
         #  and within those two we need them sorted by duration, longest first.
@@ -49,6 +38,26 @@ class GameTimer(object):
             # Remember, key is negative.
             key = key * 1000000
 
+    def pack(self):
+        """
+        typedef struct {
+            /// The duration of this timer, in 1/32 of seconds.
+            uint32_t duration;
+            /// True if this timer should repeat.
+            uint8_t recurring;
+            uint16_t result_action_id;
+        } game_timer_t;
+        """
+        pass
+            
+    def as_struct_text(self):
+        struct_text = "(game_timer_t){.duration=%d, .recurring=%d, .result_action_id=%d}" % (
+            self.duration * 32, # Convert from seconds to qc clock ticks
+            self.recurring,
+            all_actions.index(self.result)
+        )
+        return struct_text
+
 class GameInput(object):
     def __init__(self, text, result):
         if text not in all_text:
@@ -57,13 +66,30 @@ class GameInput(object):
             next_text_id += 1
         self.result = result
         self.text = text
+    
+    def pack(self):
+        """
+        typedef struct {
+            uint16_t text_addr;
+            uint16_t result_action_id;
+        } game_user_in_t;
+        """
+        pass
+            
+    def as_struct_text(self):
+        struct_text = "(game_user_in_t){.text_addr=%d, .result_action_id=%d}" % (
+            all_text.index(self.text),
+            all_actions.index(self.result)
+        )
+        
+        return struct_text
         
 class GameAction(object):
     max_extra_details = 0
     
     def __init__(self, input_tuple, state_name, prev_action, prev_choice,
                  action_type=None, detail=None, 
-                 duration=None, choice_share=None, row=None):
+                 duration=0, choice_share=1, row=None):
         if row:
             action_type = row['Result_type']
             detail = row['Result_detail']
@@ -86,6 +112,13 @@ class GameAction(object):
         self.prev_choice = prev_choice
         self.input_tuple = input_tuple
         
+        # If we're text, we need to load the text into the master text list:        
+        global all_text
+        global next_text_id
+        if self.detail not in all_text:
+            all_text.append(self.detail)
+            next_text_id += 1
+        
         # If we're a member of a choice set, we need to link the existing 
         #  last element to ourself, and then we should increment every other 
         #  member's choice_total so they're all the same.
@@ -100,27 +133,47 @@ class GameAction(object):
                 self.choice_total += previous_choice.choice_share
                 previous_choice.choice_total += self.choice_share
                 previous_choice = previous_choice.prev_choice
+        else:
+            self.choice_total = self.choice_share
         
         # If we're in an action sequence, we need to tell the existing last
         #  element of that sequence that we come next.
         if self.prev_action:
             self.prev_action.next_action = self
-        
         if self.action_type == 'STATE_TRANSITION':
             self.detail = self.detail.upper()
             if self.detail not in state_name_ids:
                 # ERROR! Unless we're allowing implicit state declaration.
                 if GameState.allow_implicit:
                     # Create a new game state for this transition.
+                    error(statefile, "Implicitly creating undefined state '%s'" % self.detail, badtext=self.detail, errtype='WARNING')
                     new_state = GameState(self.detail)
+                    
+                    # The state will display its name (truncated to 24 chars),
+                    #  then return to the current state (the one that called it)
+                    # TODO: use pop instead
+                    
+                    new_state_first_action = GameAction(
+                        ('ENTER', ''),
+                        self.detail[:24], 
+                        None, 
+                        None, 
+                        action_type='TEXT', 
+                        detail=self.detail[:24].upper(),
+                        duration=5,
+                    )
+                    new_state.insert_event(('ENTER', ''), new_state_first_action)
+                    new_state_return = GameAction(
+                        ('ENTER', ''),
+                        self.detail[:24], 
+                        new_state_first_action, 
+                        None, 
+                        action_type='STATE_TRANSITION', 
+                        detail=self.state_name,
+                    )
                 else:
                     # ERROR.                    
-                    print("FATAL: %s:%d" % (statefile, row_number))
-                    if row:
-                        print(row_lines[row_number])
-                        print(" "*(len(row['Input_type'])+len(row['Input_detail'])+len(row['Choice_share'])+len(row['Result_type']+len(row['Result_duration'])+6)) + "^")
-                    print("Unknown state '%s'" % self.detail)
-                    exit(1)
+                    error(statefile, "Transition to undefined state '%s'" % self.detail, badtext=self.detail)
             self.detail = all_states[state_name_ids[self.detail]]
         
     def get_previous_action(self):
@@ -137,6 +190,7 @@ class GameAction(object):
         
         # Find the first node in the choice set linked-list:
         while last_choice.prev_choice:
+            assert last_choice.choice_total == last_choice.prev_choice.choice_total
             last_choice = last_choice.prev_choice
         
         # Now last_choice holds the first node in the choice set. Return its
@@ -146,7 +200,6 @@ class GameAction(object):
     @staticmethod
     def create_from_row(input_tuple, state, prev_action, prev_choice, row):
         # TODO: Consider permitting implicit state definition again.
-        # TODO: Handle the integer versions
         if row['Result_type'] != 'TEXT':
             action =  GameAction(input_tuple, state.name, prev_action, 
                                  prev_choice, row=row)
@@ -252,7 +305,7 @@ class GameAction(object):
                 frame_text = frame.replace('$badgname', '%s', 1)
                 action_type = 'TEXT_BADGEVAR'
             elif '$username' in frame:
-                frame_text = frame.replace('$badgname', '%s', 1)
+                frame_text = frame.replace('$username', '%s', 1)
                 action_type = 'TEXT_USERVAR'
             elif '$' in frame:
                 fakevar = frame.split('$')[1].split()[0].split(',')[0].strip()
@@ -260,12 +313,6 @@ class GameAction(object):
                       badtext=fakevar, errtype="WARNING")
                 # print("WARNING: %s:%d" % (statefile, row_number))
                 # print("  `$` in TEXT but no variable recognized: %s" % frame_text)
-            
-            global all_text
-            global next_text_id
-            if frame_text not in all_text:
-                all_text.append(frame_text)
-                next_text_id += 1
             
             new_action = GameAction(input_tuple, state_name, prev_action,
                                     prev_choice, action_type=action_type,
@@ -287,10 +334,68 @@ class GameAction(object):
         
     def __repr__(self):
         return self.__str__()
-        
-    def struct_text(self):
-        ret = ""
+    
+    def pack(self):
+        """
+        typedef struct {
+            /// The action type ID.
+            uint16_t type;
+            /// Action detail number.
+            /**
+             ** In the event of an animation or change state, this is the ID of the
+             ** target. In the event of text, this signifies the address of the pointer
+             ** to the text in our text-storage system.
+             */
+            uint16_t detail;
+            /// The duration of the action, which may or may not be valid for this type.
+            uint16_t duration;
+            /// The ID of the next action to fire after this one, or `ACTION_NONE`.
+            uint16_t next_action_id;
+            /// The ID of the next possible choice in this choice set, or `ACTION_NONE`.
+            uint16_t next_choice_id;
+            /// The share of the likelihood of this event firing.
+            uint16_t choice_share;
+            /// The total choice shares (denominator) of all choices in this choice set.
+            uint16_t choice_total;
+        } game_action_t;
+        """
         pass
+            
+    def as_struct_text(self, whitespace=False):
+        if self.action_type.startswith('TEXT'):
+            detail_addr = all_text.index(self.detail)
+        elif self.action_type.startswith('SET_ANIM'):
+            detail_addr = 0 # TODO!!!!
+        elif self.action_type == 'STATE_TRANSITION':
+            detail_addr = all_states.index(self.detail)
+        else:
+            # TODO: OTHER TYPES
+            # TODO: PUSH
+            # TODO: CLOSE
+            # TODO: POP
+            detail_addr = 0
+        
+        struct_text = "(game_action_t){"
+        struct_text+= "    .type=GAME_ACTION_TYPE_%s, .detail=%d, .duration=%d," % (
+            self.action_type, # Use the literal, which our code has defined.
+            detail_addr,
+            self.duration*32
+        )
+        # TODO: ACTION_NONE text instead?
+        struct_text += "    .next_action_id=%d, .next_choice_id=%d, " % (
+            all_actions.index(self.next_action) if self.next_action else 0xFFFF,
+            all_actions.index(self.next_choice) if self.next_choice else 0xFFFF,
+        )
+        struct_text += "    .choice_share=%d, .choice_total=%d, " % (
+            self.choice_share,
+            self.choice_total
+        )
+        struct_text+= "}"
+        
+        if not whitespace:
+            struct_text = ' '.join(struct_text.split())
+        
+        return struct_text
         
 class GameState(object):
     next_id = 0
@@ -335,55 +440,50 @@ class GameState(object):
         if input_tuple[0] == 'USER_IN':
             self.inputs.append(GameInput(input_tuple[1], first_action))
         
-    def user_ins(self):
-        return [(input_tuple, action) for (input_tuple, action) in self.events.items() if input_tuple[0] == 'USER_IN']
-    
-        # TODO: delete:
-        # user_inputs = []
-        
-        # for input_tuple, action in self.events.items():
-            # if input_tuple[0] == 'USER_IN':
-                # user_inputs.append((input_tuple, action))
-        
-        # return user_inputs
-        
-    def entry_series(self):
-        
-        return self.events.get(('ENTER', ''), None)
-        
     def __str__(self):
         return self.name
         
     def __repr__(self):
         return self.__str__()
         
-    def struct_text(self):
+    def pack(self):
         """
         typedef struct {
-            // TODO: this id shouldn't be here.
-            uint8_t id;
             uint16_t entry_series_id;
+            /// All applicable timers for this state.
             uint8_t timer_series_len;
             game_timer_t timer_series[5];
             uint8_t input_series_len;
             game_user_in_t input_series[5];
+            // TODO: Handle NET
         } game_state_t;
         """
-        ret = ""
         pass
+            
+    def as_struct_text(self):
+        # TODO: Count longest 
+        
+        struct_text = "(game_state_t){.entry_series_id=%d, .timer_series_len=%d, .timer_series=%s, .input_series_len=%d, .input_series=%s}" % (
+            all_actions.index(self.entry_sequence_start) if self.entry_sequence_start else 0xFFFF,
+            len(self.timers),
+            '{%s}' % (','.join(map(GameTimer.as_struct_text, self.timers)),),
+            len(self.inputs),
+            '{%s}' % (','.join(map(GameInput.as_struct_text, self.inputs)),),
+        )
+        return struct_text
         
 def error(statefile, message, row=None, col=None, badtext='', errtype='FATAL'):
     if row is None:
         row = row_number
     if col is None and badtext != '' and row:
-        col = row_lines[row].find(badtext)
-    print("%s: %s:%d:" % (errtype, statefile, row))
+        col = row_lines[row].upper().find(badtext.upper())
+    print("%s: %s:%d:" % (errtype, statefile, row), file=sys.stderr)
     if row:
-        print(row_lines[row])
+        print(row_lines[row], file=sys.stderr)
         if col is not None:
             pad = ' ' * col
             print(pad + '^')
-    print('   ' + message)
+    print('   ' + message, file=sys.stderr)
     if errtype != 'WARNING':
         exit(1)
         
@@ -407,7 +507,7 @@ def read_states_and_validate(statefile):
                 error(statefile, "Expected only blank or no headings after Result_detail", 
                       row=row_number, badtext=csvreader.fieldnames[i])
         
-        
+        no_contd_allowed = 1
         for row in csvreader:
             row_number += 1
             if row['Input_type'] in IGNORE_INPUT_TYPES:
@@ -437,9 +537,25 @@ def read_states_and_validate(statefile):
                 error(statefile, "Unknown result type '%s'" % row['Result_type'],
                           badtext=row['Result_type'])
             
+            if no_contd_allowed and row['Input_type'] == 'CONTD':
+                error(statefile, "CONTD not allowed after state transitions.")
+                          
+            if row['Result_type'] == 'STATE_TRANSITION':
+                no_contd_allowed = 1
+            else:
+                no_contd_allowed = 0
+                
+            
+            if row['Result_type'] not in VALID_RESULT_TYPES:
+                error(statefile, "Unknown result type '%s'" % row['Result_type'],
+                          badtext=row['Result_type'])
+            
             if row['Input_type'] == 'ENTER' and row['Input_detail']:
                 error(statefile, "Input_detail not allowed for ENTER input types",
                       badtext=row['Input_detail'])
+            
+            # TODO: Enforce STATE TRANSITION must be last in an action sequence.
+            
         
 def read_actions(statefile_param):
     global statefile
@@ -547,6 +663,23 @@ def read_actions(statefile_param):
                 )
             current_action = next_action
         
+def display_data_str(outfile=sys.stdout):
+    print("uint16_t all_actions_len = %d;" % len(all_actions), file=outfile)
+    print("uint16_t all_text_len = %d;" % len(all_text), file=outfile)
+    print("uint16_t all_states_len = %d;" % len(all_text), file=outfile)
+    print("", file=outfile)
+    
+    print("uint8_t all_text[][25] = {%s};" % ','.join(map(lambda a: '"%s"' % a.replace('"', '\\"'), all_text)), file=outfile)
+    print("", file=outfile)
+    
+    all_actions_structs = map(GameAction.as_struct_text, all_actions)
+    print("game_action_t all_actions[] = {%s};" % ', '.join(all_actions_structs), file=outfile)
+    print("", file=outfile)
+    
+    all_states_structs = map(GameState.as_struct_text, all_states)
+    print("game_state_t all_states[] = {%s};" % ', '.join(all_states_structs), file=outfile)
+    print("", file=outfile)
+    
 def read_state_data(statefile, allow_implicit):
 
     GameState.allow_implicit = allow_implicit
@@ -578,6 +711,9 @@ def read_state_data(statefile, allow_implicit):
             #  that starts the action sequence resulting in this state
             #  transition. So we'll follow the chain back to the initial
             #  action.
+            
+            # TODO: find pops, and load/stores
+            
             label_action = action
             while label_action.get_previous_action():
                 label_action = label_action.get_previous_action()

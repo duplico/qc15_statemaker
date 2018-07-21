@@ -22,8 +22,11 @@ def main():
                              " state that automatically displays its name and"\
                              " returns to the previous state after the default"\
                              " delay.")
-    parser.add_argument('-d', '--dotfile', type=str, default='', 
+    parser.add_argument('-d', '--output-dotfile', type=str, default='', 
         help="Path to GraphViz dot file to generate.")  
+    parser.add_argument('-c', '--output-cfile', type=str, default='',
+        help="Path to the C file to generate, which will be overwritten"\
+            " with the code-style output of the statemaker.")
     
     args = parser.parse_args()
     if not os.path.isfile(args.statefile):
@@ -36,8 +39,14 @@ def main():
     
     state_graph = read_state_data(args.statefile, args.allow_implicit)
     
-    if args.dotfile:
-        nx.drawing.nx_pydot.write_dot(state_graph, args.dotfile)
+    if args.output_dotfile:
+        nx.drawing.nx_pydot.write_dot(state_graph, args.output_dotfile)
+    
+    if args.output_cfile and args.output_cfile == '-':
+        display_data_str() # stdout
+    elif args.output_cfile:
+        with open(args.output_cfile, 'w') as outfile:
+            display_data_str(outfile)
     
 if __name__ == "__main__":
     main()
