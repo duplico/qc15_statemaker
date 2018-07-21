@@ -2,7 +2,7 @@ from __future__ import print_function
 
 import csv
 import textwrap
-
+import struct
 
 import networkx as nx
 from chardet.universaldetector import UniversalDetector
@@ -14,7 +14,37 @@ all_states = []
 state_name_ids = dict()
 
 row_number = 0
+statefile = ''
 
+all_text = []
+next_text_id = 0
+
+class GameTimer(object):
+    def __init__(self, duration, recurring, result):
+        self.duration = duration
+        self.recurring = recurring
+        self.result = result
+        
+    def pack(self):
+        """
+        typedef struct {
+            /// The duration of this timer, in 1/32 of seconds.
+            uint32_t duration;
+            /// True if this timer should repeat.
+            uint8_t recurring;
+            uint16_t result_action_id;
+        } game_timer_t;
+        """
+        pass
+
+
+class GameInput(object):
+    def __init__(self, text, result)
+        if text no in all_text:
+            all_text.append(text)
+            next_text_id += 1
+        self.result = result
+        
 class GameAction(object):
     max_extra_details = 0
     
@@ -108,7 +138,7 @@ class GameAction(object):
             action =  GameAction(input_tuple, state.name, prev_action, 
                                  prev_choice, row=row)
             if input_tuple not in state.events:
-                state.events[input_tuple] = action
+                state.insert_event(input_tuple, action)
             return action
         # If we've gotten to this point, that means ... drumroll...
         # We're dealing with a TEXT row!
@@ -134,7 +164,8 @@ class GameAction(object):
         # See if this needs to be attached directly to an event:        
         if input_tuple not in state.events:
             # If so, we need to add the very first event in this chain.
-            state.events[input_tuple] = first_action
+            if input_tuple not in state.events:
+                state.insert_event(input_tuple, first_action)
         
         if (0 not in row) or (not row[0]):
             # If this is the only column, we're done. Time to return
@@ -248,6 +279,19 @@ class GameState(object):
         all_states.append(self)
         state_name_ids[self.name] = self.id
         
+        self.entry_sequence_start = None
+        self.timers = []
+        self.inputs = []
+    
+    def insert_event(input_tuple, first_action):
+        if input_tuple in self.events:
+            print("FATAL: %s:%d" % (statefile, row_number))
+            print("  Duplicate event insertion not allowed.")
+            print("  This is likely a bug. Please alert George.")
+            exit(1)
+        self.events[input_tuple] = first_action
+        # TODO: Process 
+    
     def timers(self):
         timers = []
         recurring_timers = []
@@ -369,7 +413,10 @@ def read_states_and_validate(statefile):
                       "^~~~~~~ Input_detail not allowed for ENTER input types")
                 exit(1)
         
-def read_actions(statefile):
+def read_actions(statefile_param):
+    global statefile
+    statefile = statefile_param
+    
     with open(statefile) as csvfile:
         csvreader = csv.DictReader(csvfile)
         
@@ -434,7 +481,6 @@ def read_actions(statefile):
             
             # If the input tuple already exists for this state, we know we're
             #  in case 2. If not, it's case 1.
-            
                 
             if input_tuple in current_state.events:
                 # This is case 2. It's a new action choice for an existing
