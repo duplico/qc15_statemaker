@@ -24,6 +24,8 @@ def main():
                              " delay.")
     parser.add_argument('-d', '--output-dotfile', type=str, default='', 
         help="Path to GraphViz dot file to generate.")  
+    parser.add_argument('-a', '--output-action-dotfile', type=str, default='', 
+        help="Path to GraphViz dot file to generate for the action graph.")  
     parser.add_argument('-c', '--output-cfile', type=str, default='',
         help="Path to the C file to generate, which will be overwritten"\
             " with the code-style output of the statemaker.")
@@ -42,6 +44,9 @@ def main():
     if args.output_dotfile:
         nx.drawing.nx_pydot.write_dot(state_graph, args.output_dotfile)
     
+    if args.output_action_dotfile:
+        nx.drawing.nx_pydot.write_dot(get_action_graph(), args.output_action_dotfile)
+        
     if args.output_cfile and args.output_cfile == '-':
         display_data_str() # stdout
     elif args.output_cfile:

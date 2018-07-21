@@ -175,7 +175,10 @@ class GameAction(object):
                     # ERROR.                    
                     error(statefile, "Transition to undefined state '%s'" % self.detail, badtext=self.detail)
             self.detail = all_states[state_name_ids[self.detail]]
-        
+    
+    def id(self):
+        return all_actions.index(self)
+    
     def get_previous_action(self):
         if self.prev_action:
             return self.prev_action
@@ -200,6 +203,8 @@ class GameAction(object):
     @staticmethod
     def create_from_row(input_tuple, state, prev_action, prev_choice, row):
         # TODO: Consider permitting implicit state definition again.
+        
+        
         if row['Result_type'] != 'TEXT':
             action =  GameAction(input_tuple, state.name, prev_action, 
                                  prev_choice, row=row)
@@ -209,7 +214,7 @@ class GameAction(object):
         # If we've gotten to this point, that means ... drumroll...
         # We're dealing with a TEXT row!
         
-        duration = int(row['Result_duration']) if row['Result_duration'] else 0
+        duration = int(row['Result_duration']) if row['Result_duration'] else 3
         choice_share = int(row['Choice_share']) if row['Choice_share'] else 1
         
         # This means there's a couple of extra things we need to do.
@@ -222,14 +227,15 @@ class GameAction(object):
             row['Result_detail'],
             duration,
             choice_share
-        )
-        
+        )       
+                
         # This gave us two actions, which may be the same as each other.        
         
         
         # See if this needs to be attached directly to an event:        
         if input_tuple not in state.events:
             # If so, we need to add the very first event in this chain.
+            
             if input_tuple not in state.events:
                 state.insert_event(input_tuple, first_action)
         
@@ -291,8 +297,10 @@ class GameAction(object):
     def create_text_action_seq(input_tuple, state_name, prev_action,
                                prev_choice, detail, duration, choice_share):
         first_action = None
-        prev_action = None
+        #prev_action = None
         text_frames = textwrap.wrap(detail, 24)
+        # PROBLEM: the first action is not correctly getting wired up to
+        #  its preceding action...
         if not text_frames:
             text_frames.append(' ')
         for frame in text_frames:
@@ -311,13 +319,12 @@ class GameAction(object):
                 fakevar = frame.split('$')[1].split()[0].split(',')[0].strip()
                 error(statefile, "Unrecognized variable '$%s', interpreting as literal." % fakevar,
                       badtext=fakevar, errtype="WARNING")
-                # print("WARNING: %s:%d" % (statefile, row_number))
-                # print("  `$` in TEXT but no variable recognized: %s" % frame_text)
             
             new_action = GameAction(input_tuple, state_name, prev_action,
                                     prev_choice, action_type=action_type,
                                     detail=frame_text, duration=duration,
                                     choice_share=choice_share)
+                                    
             prev_action = new_action
             if not first_action:
                 first_action = new_action
@@ -329,7 +336,7 @@ class GameAction(object):
         return (first_action, prev_action)
     
     def __str__(self):
-        return '%s%s %s' % (self.action_type, ':' if self.detail else '',
+        return '%d:%s%s %s' % (self.id(), self.action_type, ':' if self.detail else '',
                             str(self.detail))
         
     def __repr__(self):
@@ -619,6 +626,7 @@ def read_actions(statefile_param):
                     current_action, None,
                     row
                 )
+                
                 current_action = next_action
                 continue
             
@@ -722,3 +730,36 @@ def read_state_data(statefile, allow_implicit):
                                  label=str(action.input_tuple))
         
     return state_graph
+
+
+def get_action_graph():
+    action_graph = nx.MultiDiGraph()
+    # for action in all_actions:
+        # action_graph.add_node(str(action))
+        
+    for action in all_actions:
+        if action.next_action:
+            action_graph.add_edge(str(action).replace(':', ' '), str(action.next_action).replace(':', ' '),
+                                  label="next")
+        if action.next_choice:
+            action_graph.add_edge(str(action).replace(':', ' '), str(action.next_choice).replace(':', ' '),
+                                  label="alt")
+        if action.action_type == 'STATE_TRANSITION':
+            action_graph.add_edge(
+                str(action).replace(':', ' '),
+                str(action.detail)
+            )
+    
+    for state in all_states:
+        for input_tuple in state.events:
+            if not state.events[input_tuple]:
+                continue
+            action_graph.add_edge(
+                str(state).replace(':', ' '),
+                str(state.events[input_tuple]).replace(':', ' '),
+                label=str(input_tuple)
+            )
+    
+    return action_graph
+
+    
