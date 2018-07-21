@@ -39,11 +39,12 @@ class GameTimer(object):
 
 
 class GameInput(object):
-    def __init__(self, text, result)
-        if text no in all_text:
+    def __init__(self, text, result):
+        if text not in all_text:
             all_text.append(text)
             next_text_id += 1
         self.result = result
+        self.text = text
         
 class GameAction(object):
     max_extra_details = 0
@@ -283,7 +284,7 @@ class GameState(object):
         self.timers = []
         self.inputs = []
     
-    def insert_event(input_tuple, first_action):
+    def insert_event(self, input_tuple, first_action):
         if input_tuple in self.events:
             print("FATAL: %s:%d" % (statefile, row_number))
             print("  Duplicate event insertion not allowed.")
