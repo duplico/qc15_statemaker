@@ -14,6 +14,7 @@ all_states = []
 state_name_ids = dict()
 
 row_number = 0
+row_lines = []
 statefile = ''
 
 all_text = []
@@ -36,12 +37,23 @@ class GameTimer(object):
         } game_timer_t;
         """
         pass
-
+        
+    def sort_key(self):
+        # We want all one-time timers to go before recurring,
+        #  and within those two we need them sorted by duration, longest first.
+        # So, because a simple sort() is ascending, we want:
+        #  high duration -> low sort_key
+        key = -self.duration
+        # And one-time -> low sort_key
+        if not self.recurring:
+            # Remember, key is negative.
+            key = key * 1000000
 
 class GameInput(object):
     def __init__(self, text, result):
         if text not in all_text:
             all_text.append(text)
+            global next_text_id
             next_text_id += 1
         self.result = result
         self.text = text
@@ -242,6 +254,15 @@ class GameAction(object):
             elif '$username' in frame:
                 frame_text = frame.replace('$badgname', '%s', 1)
                 action_type = 'TEXT_USERVAR'
+            elif '$' in frame:
+                print("WARNING: %s:%d" % (statefile, row_number))
+                print("  `$` in TEXT but no variable recognized: %s" % frame_text)
+            
+            global all_text
+            global next_text_id
+            if frame_text not in all_text:
+                all_text.append(frame_text)
+                next_text_id += 1
             
             new_action = GameAction(input_tuple, state_name, prev_action,
                                     prev_choice, action_type=action_type,
@@ -291,24 +312,28 @@ class GameState(object):
             print("  This is likely a bug. Please alert George.")
             exit(1)
         self.events[input_tuple] = first_action
-        # TODO: Process 
-    
-    def timers(self):
-        timers = []
-        recurring_timers = []
-        for input_tuple, action in self.events.items():
-            if input_tuple[0] == 'TIMER_R':
-                recurring_timers.append((input_tuple, action))
-            elif input_tuple[0] == 'TIMER':
-                timers.append((input_tuple, action))
+        if input_tuple[0] == 'ENTER':
+            # This is the handle to our Enter event!
+            self.entry_sequence_start = first_action
         
-        # Now sort them. We need LONGEST FIRST within each list,
-        #  then to append the lists, with non-recurring first.
-        reverse_by_duration = lambda a: -int(a[0][1])
-        timers.sort(key=reverse_by_duration)
-        recurring_timers.sort(key=reverse_by_duration)
-        
-        return timers + recurring_timers
+        if input_tuple[0] in ('TIMER', 'TIMER_R'):
+            # This is a new timer event.
+            # TODO: sort the timers.
+            try:
+                dur = int(input_tuple[1])
+                if dur <=0:
+                    raise "PROBLEM"
+            except:
+                print("FATAL: %s:%d" % (statefile, row_number))
+                print("  Could not convert `%s` to positive non-zero integer." % input_tuple[1])
+                exit(1)
+            
+            self.timers.append(GameTimer(dur, input_tuple == 'TIMER_R', 
+                                         first_action))
+            self.timers.sort(key=GameTimer.sort_key) # Always in order.
+            
+        if input_tuple[0] == 'USER_IN':
+            self.inputs.append(GameInput(input_tuple[1], first_action))
         
     def user_ins(self):
         return [(input_tuple, action) for (input_tuple, action) in self.events.items() if input_tuple[0] == 'USER_IN']
@@ -365,7 +390,7 @@ def read_states_and_validate(statefile):
                 exit(1)
         
         global row_number
-        row_number = 0
+        row_number = 1
         state_is_set = False
         
         for row in csvreader:
@@ -442,7 +467,8 @@ def read_actions(statefile_param):
         current_state = None
         
         global row_number
-        
+        row_number = 1
+    
         for row in csvreader:
             row_number += 1
             if row['Input_type'] in IGNORE_INPUT_TYPES:
@@ -522,7 +548,9 @@ def read_state_data(statefile, allow_implicit):
 
     GameState.allow_implicit = allow_implicit
     
-    # First, a general validation pass with State definitions.
+    # We do an initial pass to load the contents of the text into a buffer.
+    row_lines = [line for line in open(statefile)]
+    # Then a general validation pass with State definitions.
     # Then we do a final pass to add actions.
     
     # Lex/Syntax pass:
@@ -551,5 +579,5 @@ def read_state_data(statefile, allow_implicit):
                 
             state_graph.add_edge(action.state_name, action.detail,
                                  label=str(action.input_tuple))
-    
+        
     return state_graph
