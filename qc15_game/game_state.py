@@ -117,7 +117,7 @@ class GameAction(object):
                     # ERROR.                    
                     print("FATAL: %s:%d" % (statefile, row_number))
                     if row:
-                        print(','.join(row.values()))
+                        print(row_lines[row_number])
                         print(" "*(len(row['Input_type'])+len(row['Input_detail'])+len(row['Choice_share'])+len(row['Result_type']+len(row['Result_duration'])+6)) + "^")
                     print("Unknown state '%s'" % self.detail)
                     exit(1)
@@ -255,8 +255,11 @@ class GameAction(object):
                 frame_text = frame.replace('$badgname', '%s', 1)
                 action_type = 'TEXT_USERVAR'
             elif '$' in frame:
-                print("WARNING: %s:%d" % (statefile, row_number))
-                print("  `$` in TEXT but no variable recognized: %s" % frame_text)
+                fakevar = frame.split('$')[1].split()[0].split(',')[0].strip()
+                error(statefile, "Unrecognized variable '$%s', interpreting as literal." % fakevar,
+                      badtext=fakevar, errtype="WARNING")
+                # print("WARNING: %s:%d" % (statefile, row_number))
+                # print("  `$` in TEXT but no variable recognized: %s" % frame_text)
             
             global all_text
             global next_text_id
@@ -306,11 +309,9 @@ class GameState(object):
         self.inputs = []
     
     def insert_event(self, input_tuple, first_action):
-        if input_tuple in self.events:
-            print("FATAL: %s:%d" % (statefile, row_number))
-            print("  Duplicate event insertion not allowed.")
-            print("  This is likely a bug. Please alert George.")
-            exit(1)
+        if input_tuple in self.events:            
+            error(statefile, "Duplicate event insertion. This is likely a bug in this script. Alert george@queercon.org.",
+                  badtext=row['Input_detail'])
         self.events[input_tuple] = first_action
         if input_tuple[0] == 'ENTER':
             # This is the handle to our Enter event!
@@ -324,9 +325,8 @@ class GameState(object):
                 if dur <=0:
                     raise "PROBLEM"
             except:
-                print("FATAL: %s:%d" % (statefile, row_number))
-                print("  Could not convert `%s` to positive non-zero integer." % input_tuple[1])
-                exit(1)
+                error(statefile, "Could not convert '%s' to positive integer" % input_tuple[1],
+                      row_number, badtext=input_tuple[1])
             
             self.timers.append(GameTimer(dur, input_tuple == 'TIMER_R', 
                                          first_action))
@@ -372,45 +372,55 @@ class GameState(object):
         ret = ""
         pass
         
+def error(statefile, message, row=None, col=None, badtext='', errtype='FATAL'):
+    if row is None:
+        row = row_number
+    if col is None and badtext != '' and row:
+        col = row_lines[row].find(badtext)
+    print("%s: %s:%d:" % (errtype, statefile, row))
+    if row:
+        print(row_lines[row])
+        if col is not None:
+            pad = ' ' * col
+            print(pad + '^')
+    print('   ' + message)
+    if errtype != 'WARNING':
+        exit(1)
+        
 def read_states_and_validate(statefile):
     with open(statefile) as csvfile:
+        global row_number
+        global row_lines
+        row_number = 1
+        state_is_set = False
+    
         csvreader = csv.DictReader(csvfile)
         
         for required_heading in REQUIRED_HEADINGS:
             if required_heading not in csvreader.fieldnames:
-                print("FATAL: %s:%d" % (statefile, 1))
-                print(" Required heading '%s' not found." % required_heading)
-                exit(1)
+                error(statefile, 
+                      "Required heading '%s' not found." % required_heading)
 
         result_detail_index = csvreader.fieldnames.index('Result_detail')
         for i in range(result_detail_index+1, len(csvreader.fieldnames)):
             if (csvreader.fieldnames[i]):
-                print("FATAL: %s:%d" % (statefile, 1))
-                print(" Expected only blank or no headings after Result_detail")
-                exit(1)
+                error(statefile, "Expected only blank or no headings after Result_detail", 
+                      row=row_number, badtext=csvreader.fieldnames[i])
         
-        global row_number
-        row_number = 1
-        state_is_set = False
         
         for row in csvreader:
             row_number += 1
             if row['Input_type'] in IGNORE_INPUT_TYPES:
                 continue # Skip blank and ignored (comment/action) lines
             if not state_is_set and row['Input_type'] != 'START_STATE':
-                print("FATAL: %s:%d" % (statefile, row_number))
-                print(','.join(row.values()))
-                print("^~~~~~~ Input type not allowed without STATE_START first")
-                exit(1)
+                error(statefile, "Input type '%s' not allowed before START_STATE" % row['Input_type'], 
+                      badtext=row['Input_type'])
             if row['Input_type'] == 'START_STATE':
                 state_is_set = True
                 # New state.
                 if row['Input_detail'].upper() in state_name_ids:
-                    print("FATAL: %s:%d" % (statefile, row_number))
-                    print(','.join(row.values()))
-                    print((" "*(len(row['Input_type'])+2)) + \
-                          "^~~~~~~ Duplicate state definition")
-                    exit(1)
+                    error(statefile, "Duplicate state definition '%s'" % row['Input_detail'],
+                          badtext=row['Input_detail'])
                 # TODO: Validate that other columns are empty.
                 new_state = GameState(row['Input_detail'].upper())
                 continue
@@ -420,24 +430,16 @@ def read_states_and_validate(statefile):
                 
             # If we're here, it's an action/event:
             if row['Input_type'] not in VALID_INPUT_TYPES:
-                print("FATAL: %s:%d" % (statefile, row_number))
-                print(','.join(row.values()))
-                print("^~~~~~~ Unknown input type '%s'" % row['Input_type'])
-                exit(1)
+                error(statefile, "Unknown input type '%s'" % row['Input_type'],
+                          badtext=row['Input_type'])
             
             if row['Result_type'] not in VALID_RESULT_TYPES:
-                print("FATAL: %s:%d" % (statefile, row_number))
-                print(','.join(row.values()))
-                print((" "*(len(row['Input_type'])+len(row['Input_detail'])+len(row['Choice_share'])+len(row['Result_duration'])+2)) + \
-                      "^~~~~~~ Unknown result type '%s'" % str(row['Result_type']))
-                exit(1)
+                error(statefile, "Unknown result type '%s'" % row['Result_type'],
+                          badtext=row['Result_type'])
             
             if row['Input_type'] == 'ENTER' and row['Input_detail']:
-                print("FATAL: %s:%d" % (statefile, row_number))
-                print(','.join(row.values()))
-                print((" "*(len(row['Input_type'])+2)) + \
-                      "^~~~~~~ Input_detail not allowed for ENTER input types")
-                exit(1)
+                error(statefile, "Input_detail not allowed for ENTER input types",
+                      badtext=row['Input_detail'])
         
 def read_actions(statefile_param):
     global statefile
@@ -467,6 +469,7 @@ def read_actions(statefile_param):
         current_state = None
         
         global row_number
+        global row_lines
         row_number = 1
     
         for row in csvreader:
@@ -549,7 +552,9 @@ def read_state_data(statefile, allow_implicit):
     GameState.allow_implicit = allow_implicit
     
     # We do an initial pass to load the contents of the text into a buffer.
-    row_lines = [line for line in open(statefile)]
+    global row_lines
+    row_lines = [line.strip() for line in open(statefile)]
+    row_lines = [''] + row_lines
     # Then a general validation pass with State definitions.
     # Then we do a final pass to add actions.
     
