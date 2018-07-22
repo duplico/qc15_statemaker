@@ -12,6 +12,7 @@ from qc15_game import *
 
 all_actions = []
 all_states = []
+all_animations = []
 state_name_ids = dict()
 
 row_number = 0
@@ -101,8 +102,6 @@ class GameAction(object):
         self.action_type = action_type
         self.state_name = state_name
         self.detail = detail
-        if self.action_type == 'STATE_TRANSITION':
-            self.detail = self.detail.upper()
         self.duration = duration
         self.choice_share = choice_share
         self.choice_total = 0
@@ -111,35 +110,32 @@ class GameAction(object):
         self.prev_action = prev_action
         self.prev_choice = prev_choice
         self.input_tuple = input_tuple
+            
+        # Now, handle the specific disposition of our details based upon
+        #  which action type we are:
         
         # If we're text, we need to load the text into the master text list:        
-        global all_text
-        global next_text_id
-        if self.detail not in all_text:
-            all_text.append(self.detail)
-            next_text_id += 1
-        
-        # If we're a member of a choice set, we need to link the existing 
-        #  last element to ourself, and then we should increment every other 
-        #  member's choice_total so they're all the same.
-        if self.prev_choice:
-            # Wire our previous choice up to us.
-            self.prev_choice.next_choice = self
-            # Now compute the choice total so far, also incrementing every
-            #  previous choice's total by our choice share. (which will make
-            #  them all equal, I hope I hope I hope)
-            previous_choice = self.prev_choice
-            while previous_choice:
-                self.choice_total += previous_choice.choice_share
-                previous_choice.choice_total += self.choice_share
-                previous_choice = previous_choice.prev_choice
-        else:
-            self.choice_total = self.choice_share
-        
-        # If we're in an action sequence, we need to tell the existing last
-        #  element of that sequence that we come next.
-        if self.prev_action:
-            self.prev_action.next_action = self
+        if self.action_type.startswith("TEXT"):
+            global all_text
+            global next_text_id
+            if self.detail not in all_text:
+                all_text.append(self.detail)
+                next_text_id += 1
+            
+        if self.action_type in ('PREVIOUS', 'PUSH', 'POP'):
+            # Detail and duration are ignored.
+            self.detail = ''
+            self.duration = 0
+            
+        if self.action_type == 'CLOSE':
+            # TODO
+            pass
+            
+        if self.action_type.startswith("SET_ANIM"):
+            global all_animations
+            if self.detail not in all_animations:
+                all_animations.append(self.detail)
+            
         if self.action_type == 'STATE_TRANSITION':
             self.detail = self.detail.upper()
             if self.detail not in state_name_ids:
@@ -175,7 +171,31 @@ class GameAction(object):
                     # ERROR.                    
                     error(statefile, "Transition to undefined state '%s'" % self.detail, badtext=self.detail)
             self.detail = all_states[state_name_ids[self.detail]]
-    
+        
+        # Finally, handle wiring up our linked-list structure:
+        
+        # If we're a member of a choice set, we need to link the existing 
+        #  last element to ourself, and then we should increment every other 
+        #  member's choice_total so they're all the same.
+        if self.prev_choice:
+            # Wire our previous choice up to us.
+            self.prev_choice.next_choice = self
+            # Now compute the choice total so far, also incrementing every
+            #  previous choice's total by our choice share. (which will make
+            #  them all equal, I hope I hope I hope)
+            previous_choice = self.prev_choice
+            while previous_choice:
+                self.choice_total += previous_choice.choice_share
+                previous_choice.choice_total += self.choice_share
+                previous_choice = previous_choice.prev_choice
+        else:
+            self.choice_total = self.choice_share
+        
+        # If we're in an action sequence, we need to tell the existing last
+        #  element of that sequence that we come next.
+        if self.prev_action:
+            self.prev_action.next_action = self
+            
     def id(self):
         return all_actions.index(self)
     
@@ -201,10 +221,7 @@ class GameAction(object):
         return last_choice.prev_action
         
     @staticmethod
-    def create_from_row(input_tuple, state, prev_action, prev_choice, row):
-        # TODO: Consider permitting implicit state definition again.
-        
-        
+    def create_from_row(input_tuple, state, prev_action, prev_choice, row):        
         if row['Result_type'] != 'TEXT':
             action =  GameAction(input_tuple, state.name, prev_action, 
                                  prev_choice, row=row)
@@ -297,25 +314,24 @@ class GameAction(object):
     def create_text_action_seq(input_tuple, state_name, prev_action,
                                prev_choice, detail, duration, choice_share):
         first_action = None
-        #prev_action = None
         text_frames = textwrap.wrap(detail, 24)
-        # PROBLEM: the first action is not correctly getting wired up to
-        #  its preceding action...
         if not text_frames:
             text_frames.append(' ')
         for frame in text_frames:
             action_type = 'TEXT'
             frame_text = frame
             
-            # TODO: Validate the single variable constraint.
+            variable_count = sum(frame_text.count('$%s' % variable) for variable in ALLOWED_VARIABLES)
+            if variable_count > 1:
+                error(statefile, "Only one variable allowed in TEXT frame '%s'." % frame_text)
             
-            if '$badgname' in frame:
-                frame_text = frame.replace('$badgname', '%s', 1)
-                action_type = 'TEXT_BADGEVAR'
-            elif '$username' in frame:
-                frame_text = frame.replace('$username', '%s', 1)
-                action_type = 'TEXT_USERVAR'
-            elif '$' in frame:
+            for variable in ALLOWED_VARIABLES:
+                fullvar = '$%s'%variable
+                if fullvar in frame_text:
+                    frame_text = frame_text.replace(fullvar, '%s')
+                    action_type = 'TEXT_%s' % variable.upper()
+                    
+            if '$' in frame and variable_count == 0:
                 fakevar = frame.split('$')[1].split()[0].split(',')[0].strip()
                 error(statefile, "Unrecognized variable '$%s', interpreting as literal." % fakevar,
                       badtext=fakevar, errtype="WARNING")
@@ -372,7 +388,7 @@ class GameAction(object):
         if self.action_type.startswith('TEXT'):
             detail_addr = all_text.index(self.detail)
         elif self.action_type.startswith('SET_ANIM'):
-            detail_addr = 0 # TODO!!!!
+            detail_addr = all_animations.index(self.detail)
         elif self.action_type == 'STATE_TRANSITION':
             detail_addr = all_states.index(self.detail)
         else:
