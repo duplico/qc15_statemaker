@@ -487,7 +487,7 @@ class GameState(object):
         # TODO: Count longest 
         
         struct_text = "(game_state_t){.entry_series_id=%d, .timer_series_len=%d, .timer_series=%s, .input_series_len=%d, .input_series=%s}" % (
-            all_actions.index(self.entry_sequence_start) if self.entry_sequence_start else 0xFFFF,
+            self.entry_sequence_start.id() if self.entry_sequence_start else 0xFFFF,
             len(self.timers),
             '{%s}' % (','.join(map(GameTimer.as_struct_text, self.timers)),),
             len(self.inputs),
@@ -722,6 +722,10 @@ def read_state_data(statefile, allow_implicit):
     # Time to process the results.
     read_actions(statefile)
         
+    # Get rid of any no-ops that we can delete.
+    # TODO:
+    #cull_nops()
+        
     # Now, build the state diagram.
     # Now we're going to build our pretty graph.
     state_graph = nx.MultiDiGraph()
@@ -747,7 +751,34 @@ def read_state_data(statefile, allow_implicit):
         
     return state_graph
 
-
+def cull_nops():
+    # TODO: Make sure everything about action IDs are auto-computing
+    for action in all_actions:
+        if action.type == 'NOP':
+            # First handle action sequences (the "vertical" direction):
+            
+            # TODO: Crap! Auto-generated NOPs have multiple previous
+            #  states. Maybe we can put them in detail.
+            
+            # A special case is if we have no prev_action, in which case
+            #  this NOP is the beginning of an action sequence. Deleting these
+            #  is not yet implemented.
+            if not action.prev_action:
+                continue
+            previous = action.prev_action
+            next = action.next_action
+            previous.next_action = next
+            next.prev_action = previous
+            
+            # next handle action choices (the "horizontal" direction):
+            previous = action.prev_choice
+            next = action.next_choice
+            if previous:
+                previous.next_choice = next
+            if next:
+                next.prev_choice = previous
+            
+    
 def get_action_graph():
     action_graph = nx.MultiDiGraph()
     # for action in all_actions:
