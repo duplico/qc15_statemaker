@@ -231,7 +231,7 @@ class GameAction(object):
         # If we've gotten to this point, that means ... drumroll...
         # We're dealing with a TEXT row!
         
-        duration = int(row['Result_duration']) if row['Result_duration'] else 3
+        duration = int(row['Result_duration']) if row['Result_duration'] else 0
         choice_share = int(row['Choice_share']) if row['Choice_share'] else 1
         
         # This means there's a couple of extra things we need to do.
@@ -352,8 +352,8 @@ class GameAction(object):
         return (first_action, prev_action)
     
     def __str__(self):
-        return '%d:%s%s %s' % (self.id(), self.action_type, ':' if self.detail else '',
-                            str(self.detail))
+        return '%d:%s%s %s dur %d' % (self.id(), self.action_type, ':' if self.detail else '',
+                            str(self.detail), self.duration)
         
     def __repr__(self):
         return self.__str__()
