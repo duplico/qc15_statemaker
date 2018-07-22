@@ -53,7 +53,7 @@ class GameTimer(object):
             
     def as_struct_text(self):
         struct_text = "(game_timer_t){.duration=%d, .recurring=%d, .result_action_id=%d}" % (
-            self.duration * 32, # Convert from seconds to qc clock ticks
+            int(self.duration * 32), # Convert from seconds to qc clock ticks
             self.recurring,
             all_actions.index(self.result)
         )
@@ -95,7 +95,7 @@ class GameAction(object):
             action_type = row['Result_type']
             detail = row['Result_detail']
             # TODO: default duration per result type
-            duration = int(row['Result_duration']) if row['Result_duration'] else 0
+            duration = float(row['Result_duration']) if row['Result_duration'] else 0.0
             choice_share = int(row['Choice_share']) if row['Choice_share'] else 1
             
         all_actions.append(self)
@@ -231,7 +231,7 @@ class GameAction(object):
         # If we've gotten to this point, that means ... drumroll...
         # We're dealing with a TEXT row!
         
-        duration = int(row['Result_duration']) if row['Result_duration'] else 0
+        duration = float(row['Result_duration']) if row['Result_duration'] else 0.5
         choice_share = int(row['Choice_share']) if row['Choice_share'] else 1
         
         # This means there's a couple of extra things we need to do.
@@ -352,8 +352,8 @@ class GameAction(object):
         return (first_action, prev_action)
     
     def __str__(self):
-        return '%d:%s%s %s dur %d' % (self.id(), self.action_type, ':' if self.detail else '',
-                            str(self.detail), self.duration)
+        return '%d:%s%s %s (%d/32 sec)' % (self.id(), self.action_type, ':' if self.detail else '',
+                            str(self.detail), self.duration*32)
         
     def __repr__(self):
         return self.__str__()
@@ -767,6 +767,10 @@ def get_action_graph():
             )
     
     for state in all_states:
+        if state.id == 0:
+            action_graph.add_node(str(state).replace(':', ' '), shape='star')
+        else:
+            action_graph.add_node(str(state).replace(':', ' '), shape='box')
         for input_tuple in state.events:
             if not state.events[input_tuple]:
                 continue
