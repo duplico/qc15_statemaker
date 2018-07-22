@@ -108,9 +108,9 @@ The following events are supported:
     timer event.
     
 ``TIMER_R``
-    A recurring timer. ``Input_detail`` is the length, in seconds, of the timer.
-    That is, a recurring timer will fire every ``Input_detail`` seconds. Note 
-    that ambiguity is resolved in decreasing order of specificity. That is, if a
+    A recurring timer. ``Input_detail`` is the length, in seconds, of the timer,
+    so that a recurring timer will fire every ``Input_detail`` seconds. Note 
+    that ambiguity is resolved in decreasing order of specificity. If a
     one-time timer and a recurring timer both have the option of firing at the
     same time, the one-time timer will fire an event, and the recurring timer
     will skip its iteration. Similarly, if there are multiple recurring timers
@@ -193,7 +193,8 @@ The following actions are supported:
     event that could result in this state being reached will not fire, and
     and user input option that would result in this state being reached will
     not be presented to the user. ``Result_detail`` is ignored, and 
-    ``Result_duration`` is ignored.
+    ``Result_duration`` is ignored. Please see the note regarding ``CLOSE``
+    below for more specifics on the required configuration of closable states.
 
 ``STATE_TRANSITION``
     Changes states to the state named in ``Result_detail``. ``Result_duration`` 
@@ -213,6 +214,26 @@ The following actions are supported:
     Loads the state that we most recently left to reach the current state, and
     performs a state transition to it. ``Result_detail`` is ignored. 
     ``Result_duration`` is ignored.
+    
+The ``CLOSE`` action
+~~~~~~~~~~~~~~~~~~~~
+There is a special requirement for correct functioning of the CLOSE action.
+When building an action that can result in a transition to a closable state,
+keep the following in mind:
+
+The interpreter on the badge determines whether to disable an input event
+based on the chain of ``next_action``s from its first choice set (the top one
+defined in the input file). If that first action sequence results in a
+state transition to a closed state, that input will be locked out: any timer
+won't fire, and any user input will not be shown as an option. This will be the
+case even if there are _other_ action sequences, later in the choice set, that
+do _not_ result in that state transition.
+
+If there are multiple action sequences in the choice set, and the first choice
+does not result in a state transition, but a subsequent one does, no events
+or choices will be locked out. The entire chosen action sequence (which MAY be
+one that is supposed to result in a state transition) will execute, except that
+a state transition to a closed state will have no effect.
     
 Combining Actions
 -----------------
