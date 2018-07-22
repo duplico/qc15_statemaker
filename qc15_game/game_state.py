@@ -177,6 +177,7 @@ class GameAction(object):
         # If we're a member of a choice set, we need to link the existing 
         #  last element to ourself, and then we should increment every other 
         #  member's choice_total so they're all the same.
+        self.choice_total = self.choice_share
         if self.prev_choice:
             # Wire our previous choice up to us.
             self.prev_choice.next_choice = self
@@ -188,8 +189,6 @@ class GameAction(object):
                 self.choice_total += previous_choice.choice_share
                 previous_choice.choice_total += self.choice_share
                 previous_choice = previous_choice.prev_choice
-        else:
-            self.choice_total = self.choice_share
         
         # If we're in an action sequence, we need to tell the existing last
         #  element of that sequence that we come next.
@@ -301,7 +300,10 @@ class GameAction(object):
         nop_aggregator = GameAction(input_tuple, state.name, None, None,
                                     action_type='NOP', detail='', duration=0,
                                     choice_share=1)
-        nop_aggregator.prev_action = choices_generated[0][1]
+        # Link it to the LAST one, so that our assertion in the
+        #  get_previous_action() method will detect malformed choice set
+        #  choice totals.
+        nop_aggregator.prev_action = choices_generated[-1][1]
         
         # Wire up the next action for every one of our choices' last actions
         #  to the NOP aggregator. Then return it.
