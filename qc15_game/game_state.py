@@ -251,7 +251,6 @@ class GameAction(object):
         # See if this needs to be attached directly to an event:        
         if input_tuple not in state.events:
             # If so, we need to add the very first event in this chain.
-            
             if input_tuple not in state.events:
                 state.insert_event(input_tuple, first_action)
         
@@ -330,7 +329,8 @@ class GameAction(object):
             for variable in ALLOWED_VARIABLES:
                 fullvar = '$%s'%variable
                 if fullvar in frame_text:
-                    frame_text = frame_text.replace(fullvar, '%s')
+                    frame_text = frame_text.replace(fullvar, 
+                                                    ALLOWED_VARIABLES[variable])
                     action_type = 'TEXT_%s' % variable.upper()
                     
             if '$' in frame and variable_count == 0:
@@ -354,8 +354,9 @@ class GameAction(object):
         return (first_action, prev_action)
     
     def __str__(self):
-        return '%d:%s%s %s (%d/32 sec)' % (self.id(), self.action_type, ':' if self.detail else '',
-                            str(self.detail), self.duration*32)
+        return '%d:%s%s %s (%d/32 sec) [%d/%d]' % (self.id(), self.action_type, ':' if self.detail else '',
+                            str(self.detail), self.duration*32, self.choice_share,
+                            self.choice_total)
         
     def __repr__(self):
         return self.__str__()
@@ -509,6 +510,7 @@ def error(statefile, message, row=None, col=None, badtext='', errtype='FATAL'):
             pad = ' ' * col
             print(pad + '^')
     print('   ' + message, file=sys.stderr)
+    print()
     if errtype != 'WARNING':
         exit(1)
         
@@ -692,7 +694,9 @@ def read_actions(statefile_param):
 def display_data_str(outfile=sys.stdout):
     print("uint16_t all_actions_len = %d;" % len(all_actions), file=outfile)
     print("uint16_t all_text_len = %d;" % len(all_text), file=outfile)
-    print("uint16_t all_states_len = %d;" % len(all_text), file=outfile)
+    print("uint16_t all_states_len = %d;" % len(all_states), file=outfile)
+    # TODO:
+    print("// uint16_t all_anims_len = %d;" % len(all_animations), file=outfile)
     print("", file=outfile)
     
     print("uint8_t all_text[][25] = {%s};" % ','.join(map(lambda a: '"%s"' % a.replace('"', '\\"'), all_text)), file=outfile)
@@ -706,7 +710,7 @@ def display_data_str(outfile=sys.stdout):
     print("game_state_t all_states[] = {%s};" % ', '.join(all_states_structs), file=outfile)
     print("", file=outfile)
     
-def read_state_data(statefile, allow_implicit):
+def read_state_data(statefile, allow_implicit, do_cull_nops):
 
     GameState.allow_implicit = allow_implicit
     
@@ -725,8 +729,8 @@ def read_state_data(statefile, allow_implicit):
     read_actions(statefile)
         
     # Get rid of any no-ops that we can delete.
-    # TODO:
-    #cull_nops()
+    if do_cull_nops:
+        cull_nops()
         
     # Now, build the state diagram.
     # Now we're going to build our pretty graph.
@@ -754,31 +758,25 @@ def read_state_data(statefile, allow_implicit):
     return state_graph
 
 def cull_nops():
-    # TODO: Make sure everything about action IDs are auto-computing
-    for action in all_actions:
-        if action.type == 'NOP':
-            # First handle action sequences (the "vertical" direction):
-            
-            # TODO: Crap! Auto-generated NOPs have multiple previous
-            #  states. Maybe we can put them in detail.
-            
-            # A special case is if we have no prev_action, in which case
-            #  this NOP is the beginning of an action sequence. Deleting these
-            #  is not yet implemented.
-            if not action.prev_action:
-                continue
-            previous = action.prev_action
-            next = action.next_action
-            previous.next_action = next
-            next.prev_action = previous
-            
-            # next handle action choices (the "horizontal" direction):
-            previous = action.prev_choice
-            next = action.next_choice
-            if previous:
-                previous.next_choice = next
-            if next:
-                next.prev_choice = previous
+    # Everything about action IDs are auto-computing.
+    
+    nops_to_delete = set()
+    
+    for before_nop in all_actions:
+        # This doesn't cover all POSSIBLE cases, but it does cover all
+        #  ALLOWED cases: (except that NOPs at the start of an action sequence
+        #  are not deleted. btw, those are the only ones that could be in a 
+        #  choice set.
+        if before_nop.next_action and before_nop.next_action.action_type == 'NOP':
+            nop = before_nop.next_action
+            after_nop = nop.next_action
+            if after_nop:
+                after_nop.prev_action = before_nop
+            before_nop.next_action = after_nop
+            nops_to_delete.add(nop)
+    
+    for action in nops_to_delete:
+        all_actions.remove(action)
             
     
 def get_action_graph():
