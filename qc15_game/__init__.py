@@ -3,10 +3,14 @@ REQUIRED_HEADINGS = ['Input_type', 'Input_detail', 'Choice_share',
 
 IGNORE_STATES = ['EXAMPLE_NOTPARSED', 'SHEETNAMES']
 VALID_INPUT_TYPES = ['ENTER', 'USER_IN', 'BUTTON', 'NET', 'TIMER', 'TIMER_R',
-                     'CONTD', 'NOP']
+                     'CONTD']
 IGNORE_INPUT_TYPES = ['', 'COMMENT', 'ACTIONS']
 VALID_RESULT_TYPES = ['TEXT', 'SET_ANIM_TEMP', 'SET_ANIM_BG', 
                       'STATE_TRANSITION', 'OTHER', 'CLOSE', 'POP', 'PUSH',
-                      'PREVIOUS']
+                      'PREVIOUS', 'NOP']
 
-ALLOWED_VARIABLES = ['badgname', 'username']
+ALLOWED_VARIABLES = {
+    'badgname' : '%s',
+    'username' : '%s',
+    'cnt' : '%d',
+}

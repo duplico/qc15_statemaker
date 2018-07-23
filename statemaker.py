@@ -22,6 +22,9 @@ def main():
                              " state that automatically displays its name and"\
                              " returns to the previous state after the default"\
                              " delay.")
+    parser.add_argument('--cull-nops', action='store_true',
+                        help="Attempt to detect deletable NOP actions,"
+                             " and remove them")
     parser.add_argument('-d', '--output-dotfile', type=str, default='', 
         help="Path to GraphViz dot file to generate.")  
     parser.add_argument('-a', '--output-action-dotfile', type=str, default='', 
@@ -39,7 +42,8 @@ def main():
     # TODO: default duration
     # TODO: allow implicit
     
-    state_graph = read_state_data(args.statefile, args.allow_implicit)
+    state_graph = read_state_data(args.statefile, args.allow_implicit,
+                                  args.cull_nops)
     
     if args.output_dotfile:
         nx.drawing.nx_pydot.write_dot(state_graph, args.output_dotfile)
