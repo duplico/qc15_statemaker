@@ -20,6 +20,10 @@ all_other_input_descs = [
     'BADGESNEARBYMORETHAN1', # Specialized ENTER event
 ]
 
+all_other_output_descs = [
+    'CUSTOMSTATEUSERNAME', # User name entry
+]
+
 row_number = 0
 row_lines = []
 statefile = ''
@@ -174,6 +178,12 @@ class GameAction(object):
             if self.detail not in all_text:
                 all_text.append(self.detail)
                 next_text_id += 1
+            
+        if self.action_type == 'OTHER':
+            self.detail = self.detail.upper().replace(' ', '_')
+            self.detail = self.detail.replace('.', '')
+            if self.detail not in all_other_output_descs:
+                all_other_output_descs.append(self.detail)
             
         if self.action_type in ('PREVIOUS', 'PUSH', 'POP'):
             # Detail and duration are ignored.
@@ -458,6 +468,8 @@ class GameAction(object):
             detail_addr = all_animations.index(self.detail) if self.detail else NULL
         elif self.action_type == 'STATE_TRANSITION':
             detail_addr = all_states.index(self.detail)
+        elif self.action_type == 'OTHER':
+            detail_addr = all_other_output_descs.index(self.detail.upper())
         else:
             # TODO: OTHER TYPES
             # TODO: PUSH
@@ -529,7 +541,7 @@ class GameState(object):
             self.other_ins.append(GameOther(input_tuple[1], first_action))
         
     def __str__(self):
-        return self.name
+        return '%d %s' % (self.id, self.name)
         
     def __repr__(self):
         return self.__str__()
@@ -784,6 +796,17 @@ def display_data_str(outfile=sys.stdout):
     for other_type in all_other_input_descs:
         print("#define SPECIAL_%s %d" % (other_type, i), file=outfile)
         i += 1
+        
+    i=0
+    for other_type in all_other_output_descs:
+        print("#define OTHER_ACTION_%s %d" % (other_type, i), file=outfile)
+        i += 1
+        
+    closable_states = set()
+    for action in all_actions:
+        if action.action_type == 'CLOSE':
+            closable_states.add(action.state_name)
+    print("#define CLOSABLE_STATES %d" % len(closable_states), file=outfile)
     
 def read_state_data(statefile, allow_implicit, do_cull_nops):
 
