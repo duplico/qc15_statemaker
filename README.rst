@@ -178,7 +178,7 @@ The following actions are supported:
     contains the name of the animation to select. Consistently use a short,
     descriptive name, such as ``Rainbow`` or ``AllWhite``. This animation will
     repeat until a new background animation is set. ``Action_duration`` is 
-    ignored.
+    ignored. This may also be ``NONE``, to turn off the LEDs.
     
 ``SET_ANIM_TEMP``
     Invokes a temporary background animation for the ring LEDs. The 
@@ -186,7 +186,8 @@ The following actions are supported:
     Consistently use a short, descriptive name, such as ``Rainbow`` or 
     ``AllWhite``. This action type shares the same pool of animations as 
     ``SET_ANIM_BG``. ``Result_duration`` is the number of loops to repeat the 
-    animation. The next action in the sequence fires immediately.
+    animation. The next action in the sequence fires immediately. A temporary
+    animation should not be ``NONE``.
 
 ``CLOSE``
     Permanently CLOSES the current state, making it never again reachable. Any

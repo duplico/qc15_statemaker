@@ -133,7 +133,9 @@ class GameAction(object):
             
         if self.action_type.startswith("SET_ANIM"):
             global all_animations
-            if self.detail not in all_animations:
+            if self.detail == 'NONE':
+                self.detail = None
+            elif self.detail not in all_animations:
                 all_animations.append(self.detail)
             
         if self.action_type == 'STATE_TRANSITION':
@@ -230,7 +232,7 @@ class GameAction(object):
         # If we've gotten to this point, that means ... drumroll...
         # We're dealing with a TEXT row!
         
-        duration = float(row['Result_duration']) if row['Result_duration'] else 0.5
+        duration = float(row['Result_duration']) if row['Result_duration'] else None
         choice_share = int(row['Choice_share']) if row['Choice_share'] else 1
         
         # This means there's a couple of extra things we need to do.
@@ -316,11 +318,16 @@ class GameAction(object):
                                prev_choice, detail, duration, choice_share):
         first_action = None
         text_frames = textwrap.wrap(detail, 24)
+        
         if not text_frames:
             text_frames.append(' ')
         for frame in text_frames:
             action_type = 'TEXT'
             frame_text = frame
+            
+            frame_dur = duration
+            if frame_dur is None:
+                frame_dur =  0.5 + 0.03125*len(frame_text)
             
             variable_count = sum(frame_text.count('$%s' % variable) for variable in ALLOWED_VARIABLES)
             if variable_count > 1:
@@ -340,7 +347,7 @@ class GameAction(object):
             
             new_action = GameAction(input_tuple, state_name, prev_action,
                                     prev_choice, action_type=action_type,
-                                    detail=frame_text, duration=duration,
+                                    detail=frame_text, duration=frame_dur,
                                     choice_share=choice_share)
                                     
             prev_action = new_action
@@ -391,7 +398,7 @@ class GameAction(object):
         if self.action_type.startswith('TEXT'):
             detail_addr = all_text.index(self.detail)
         elif self.action_type.startswith('SET_ANIM'):
-            detail_addr = all_animations.index(self.detail)
+            detail_addr = all_animations.index(self.detail) if detail_addr else 0xFFFF
         elif self.action_type == 'STATE_TRANSITION':
             detail_addr = all_states.index(self.detail)
         else:
