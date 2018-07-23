@@ -25,26 +25,44 @@ Invocation
 
 The invocation of statemaker is as follows::
 
-    python statemaker.py  [-h] [--statefile STATEFILE]
+    python statemaker.py  [-h] --statefile STATEFILE
                           [--default-duration DEFAULT_DURATION]
-                          [--allow-implicit] [-d DOTFILE]
-                          
+                          [--allow-implicit] [--cull-nops]
+                          [-d OUTPUT_DOTFILE]
+                          [-a OUTPUT_ACTION_DOTFILE]
+                          [-c OUTPUT_CFILE]
+    
     optional arguments:
       -h, --help            show this help message and exit
       --statefile STATEFILE
                             Path to CSV file containing all the states for the
-                            game. Defaults to 
+                            game.
       --default-duration DEFAULT_DURATION
                             The default duration of actions whose durations are
-                            unspecified. Default is 0.
+                            unspecified. Use of this is DISCOURAGED because it
+                            may override logic in statemaker that attempts to
+                            select sane defaults on a per-action basis, based
+                            upon the contents of the action.
       --allow-implicit      Allow the implicit declaration of states. This is
                             almost certainly NOT what you want to do for the
                             production badge, but during development it might be
                             useful. This will generate a dead-end state that
                             automatically displays its name and returns to the
                             previous state after the default delay.
-      -d DOTFILE, --dotfile DOTFILE
-                            Path to GraphViz dot file to generate.
+      --cull-nops           Attempt to detect deletable NOP actions, and remove
+                            them.
+      -d OUTPUT_DOTFILE, --output-dotfile OUTPUT_DOTFILE
+                            Path to GraphViz dot file to generate for the state
+                            machine specification (States only)
+      -a OUTPUT_ACTION_DOTFILE, --output-action-dotfile OUTPUT_ACTION_DOTFILE
+                            Path to GraphViz dot file to generate for the action
+                            graph. The action graph contains every state and
+                            every individual action in the game and will likely
+                            be very large.
+      -c OUTPUT_CFILE, --output-cfile OUTPUT_CFILE
+                            Path to the C file to generate, which will be
+                            overwritten with the code-style output of the
+                            statemaker.
 
 Implicit State Declaration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
