@@ -148,7 +148,8 @@ The following special input types are also supported:
     
 ``START_STATE``
     Begins the specification of a new state. The state's name is indicated by
-    ``Input_detail``.
+    ``Input_detail``. *IMPORTANT: The very FIRST ``START_STATE`` command in the
+    imput file will be the initial state of the game.
     
 Actions
 -------
