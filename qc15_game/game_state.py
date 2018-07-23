@@ -77,6 +77,8 @@ class GameTimer(object):
 
 class GameInput(object):
     def __init__(self, text, result):
+        if len(text) > 23:
+            error(statefile, "Input text too long.", badtext=text)
         if text not in all_text:
             all_text.append(text)
             global next_text_id
