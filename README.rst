@@ -186,7 +186,8 @@ The following actions are supported:
     Consistently use a short, descriptive name, such as ``Rainbow`` or 
     ``AllWhite``. This action type shares the same pool of animations as 
     ``SET_ANIM_BG``. ``Result_duration`` is the number of loops to repeat the 
-    animation. The next action in the sequence fires immediately.
+    animation. The next action in the sequence fires immediately. The duration
+    must be less than 255 (valid values are 0..254, inclusive).
 
 ``CLOSE``
     Permanently CLOSES the current state, making it never again reachable. Any
