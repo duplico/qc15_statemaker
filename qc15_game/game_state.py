@@ -15,6 +15,11 @@ all_states = []
 all_animations = []
 state_name_ids = dict()
 
+all_other_input_descs = [
+    'BADGESNEARBY0', # Specialized ENTER event
+    'BADGESNEARBYMORETHAN1', # Specialized ENTER event
+]
+
 row_number = 0
 row_lines = []
 statefile = ''
@@ -49,14 +54,21 @@ class GameTimer(object):
             uint16_t result_action_id;
         } game_timer_t;
         """
-        pass
+        return struct.pack(
+            '<LxBH',
+            *self.as_int_sequence()
+        )
             
-    def as_struct_text(self):
-        struct_text = "(game_timer_t){.duration=%d, .recurring=%d, .result_action_id=%d}" % (
+    def as_int_sequence(self):
+        return (
             int(self.duration * 32), # Convert from seconds to qc clock ticks
             self.recurring,
             all_actions.index(self.result)
         )
+            
+    def as_struct_text(self):
+        struct_text = "(game_timer_t){.duration=%d, .recurring=%d, " \
+                      ".result_action_id=%d}" % self.as_int_sequence()
         return struct_text
 
 class GameInput(object):
@@ -75,13 +87,54 @@ class GameInput(object):
             uint16_t result_action_id;
         } game_user_in_t;
         """
-        pass
+        return struct.pack(
+            '<HH',
+            *self.as_int_sequence()
+        )
             
-    def as_struct_text(self):
-        struct_text = "(game_user_in_t){.text_addr=%d, .result_action_id=%d}" % (
+    def as_int_sequence(self):
+        return (
             all_text.index(self.text),
             all_actions.index(self.result)
         )
+            
+    def as_struct_text(self):
+        struct_text = "(game_user_in_t){.text_addr=%d, .result_action_id=%d}" %\
+            self.as_int_sequence()
+        
+        return struct_text
+        
+class GameOther(object):
+    def __init__(self, desc, result):
+        self.result = result
+        self.desc = desc.upper()
+        if self.desc in all_other_input_descs:
+            self.id = all_other_input_descs.index(self.desc)
+        else:
+            self.id = len(all_other_input_descs)
+            all_other_input_descs.append(self.desc)
+    
+    def pack(self):
+        """
+        typedef struct {
+            uint16_t type_id;
+            uint16_t result_action_id;
+        } game_other_in_t;
+        """
+        return struct.pack(
+            '<HH',
+            *self.as_int_sequence()
+        )
+            
+    def as_int_sequence(self):
+        return (
+            all_other_input_descs.index(self.desc),
+            all_actions.index(self.result)
+        )
+            
+    def as_struct_text(self):
+        struct_text = "(game_other_in_t){.type_id=%d, .result_action_id=%d}" %\
+            self.as_int_sequence()
         
         return struct_text
         
@@ -392,13 +445,17 @@ class GameAction(object):
             uint16_t choice_total;
         } game_action_t;
         """
-        pass
-            
-    def as_struct_text(self, whitespace=False):
+        fmt = '<HHHHHHH'
+        return struct.pack(
+            format,
+            *self.as_int_sequence()
+        )
+    
+    def detail_addr(self):
         if self.action_type.startswith('TEXT'):
             detail_addr = all_text.index(self.detail)
         elif self.action_type.startswith('SET_ANIM'):
-            detail_addr = all_animations.index(self.detail) if detail_addr else 0xFFFF
+            detail_addr = all_animations.index(self.detail) if self.detail else NULL
         elif self.action_type == 'STATE_TRANSITION':
             detail_addr = all_states.index(self.detail)
         else:
@@ -407,27 +464,21 @@ class GameAction(object):
             # TODO: CLOSE
             # TODO: POP
             detail_addr = 0
-        
-        struct_text = "(game_action_t){"
-        struct_text+= "    .type=GAME_ACTION_TYPE_%s, .detail=%d, .duration=%d," % (
-            self.action_type, # Use the literal, which our code has defined.
-            detail_addr,
-            self.duration*32
-        )
-        # TODO: ACTION_NONE text instead?
-        struct_text += "    .next_action_id=%d, .next_choice_id=%d, " % (
-            all_actions.index(self.next_action) if self.next_action else 0xFFFF,
-            all_actions.index(self.next_choice) if self.next_choice else 0xFFFF,
-        )
-        struct_text += "    .choice_share=%d, .choice_total=%d, " % (
+        return detail_addr
+    
+    def as_int_sequence(self):
+        return (
+            RESULT_TYPE_OUTPUT[self.action_type],
+            self.detail_addr(),
+            int(self.duration*32),
+            all_actions.index(self.next_action) if self.next_action else NULL,
+            all_actions.index(self.next_choice) if self.next_choice else NULL,
             self.choice_share,
-            self.choice_total
+            self.choice_total,
         )
-        struct_text+= "}"
-        
-        if not whitespace:
-            struct_text = ' '.join(struct_text.split())
-        
+    
+    def as_struct_text(self):
+        struct_text = "(game_action_t){%d, %d, %d, %d, %d, %d, %d}" % self.as_int_sequence()
         return struct_text
         
 class GameState(object):
@@ -445,9 +496,10 @@ class GameState(object):
         self.entry_sequence_start = None
         self.timers = []
         self.inputs = []
+        self.other_ins = []
     
     def insert_event(self, input_tuple, first_action):
-        if input_tuple in self.events:            
+        if input_tuple in self.events:
             error(statefile, "Duplicate event insertion. This is likely a bug in this script. Alert george@queercon.org.",
                   badtext=row['Input_detail'])
         self.events[input_tuple] = first_action
@@ -472,6 +524,9 @@ class GameState(object):
             
         if input_tuple[0] == 'USER_IN':
             self.inputs.append(GameInput(input_tuple[1], first_action))
+            
+        if input_tuple[0] == 'NET':
+            self.other_ins.append(GameOther(input_tuple[1], first_action))
         
     def __str__(self):
         return self.name
@@ -483,26 +538,34 @@ class GameState(object):
         """
         typedef struct {
             uint16_t entry_series_id;
-            /// All applicable timers for this state.
             uint8_t timer_series_len;
-            game_timer_t timer_series[5];
             uint8_t input_series_len;
-            game_user_in_t input_series[5];
-            // TODO: Handle NET
+            uint8_t other_series_len;
+
+            game_timer_t timer_series[5];
+            game_user_in_t input_series[6];
+            game_other_in_t other_series[3];
         } game_state_t;
         """
         pass
             
-    def as_struct_text(self):
-        # TODO: Count longest 
-        
-        struct_text = "(game_state_t){.entry_series_id=%d, .timer_series_len=%d, .timer_series=%s, .input_series_len=%d, .input_series=%s}" % (
+    def as_int_sequence(self):
+        return (
             self.entry_sequence_start.id() if self.entry_sequence_start else 0xFFFF,
             len(self.timers),
-            '{%s}' % (','.join(map(GameTimer.as_struct_text, self.timers)),),
             len(self.inputs),
-            '{%s}' % (','.join(map(GameInput.as_struct_text, self.inputs)),),
+            len(self.other_ins)
         )
+            
+    def as_struct_text(self):
+        struct_text = "(game_state_t){.entry_series_id=%d, .timer_series_len=%d, .input_series_len=%d, .other_series_len=%d, " % self.as_int_sequence()
+        struct_text += ".timer_series=%s, .input_series=%s, .other_series=%s}" %\
+            (
+                '{%s}' % (','.join(map(GameTimer.as_struct_text, self.timers)),),
+                '{%s}' % (','.join(map(GameInput.as_struct_text, self.inputs)),),
+                '{%s}' % (','.join(map(GameOther.as_struct_text, self.other_ins)),),
+            )
+        
         return struct_text
         
 def error(statefile, message, row=None, col=None, badtext='', errtype='FATAL'):
@@ -703,7 +766,7 @@ def display_data_str(outfile=sys.stdout):
     print("uint16_t all_text_len = %d;" % len(all_text), file=outfile)
     print("uint16_t all_states_len = %d;" % len(all_states), file=outfile)
     # TODO:
-    print("// uint16_t all_anims_len = %d;" % len(all_animations), file=outfile)
+    print("uint16_t all_anims_len = %d;" % len(all_animations), file=outfile)
     print("", file=outfile)
     
     print("uint8_t all_text[][25] = {%s};" % ','.join(map(lambda a: '"%s"' % a.replace('"', '\\"'), all_text)), file=outfile)
@@ -716,6 +779,11 @@ def display_data_str(outfile=sys.stdout):
     all_states_structs = map(GameState.as_struct_text, all_states)
     print("game_state_t all_states[] = {%s};" % ', '.join(all_states_structs), file=outfile)
     print("", file=outfile)
+    
+    i=0
+    for other_type in all_other_input_descs:
+        print("#define SPECIAL_%s %d" % (other_type, i), file=outfile)
+        i += 1
     
 def read_state_data(statefile, allow_implicit, do_cull_nops):
 

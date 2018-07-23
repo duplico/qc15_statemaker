@@ -10,7 +10,7 @@ from qc15_game import *
 
 def main():
     parser = argparse.ArgumentParser("Parse the state data for a qc15 badge.")
-    parser.add_argument('--statefile', type=str, default='state_file.csv', 
+    parser.add_argument('--statefile', type=str, required=True, 
         help="Path to CSV file containing all the states for the game.")        
     parser.add_argument('--default-duration', type=int, default=5,
         help="The default duration of actions whose durations are unspecified.")
