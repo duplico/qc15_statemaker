@@ -783,7 +783,7 @@ def display_data_str(outfile=sys.stdout):
     print("uint16_t all_anims_len = %d;" % len(all_animations), file=outfile)
     print("", file=outfile)
     
-    print("uint8_t all_text[][25] = {%s};" % ','.join(map(lambda a: '"%s"' % a.replace('"', '\\"'), all_text)), file=outfile)
+    print("uint8_t all_text[][25] = {%s};" % ','.join(map(lambda a: '"%s"' % a.replace('"', '\\"').strip(), all_text)), file=outfile)
     print("", file=outfile)
     
     all_actions_structs = map(GameAction.as_struct_text, all_actions)
