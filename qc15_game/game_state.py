@@ -226,7 +226,7 @@ class GameAction(object):
                         duration=5,
                     )
                     new_state.insert_event(('ENTER', ''), new_state_first_action)
-                    new_state_return = GameAction(
+                    GameAction(
                         ('ENTER', ''),
                         self.detail[:24], 
                         new_state_first_action, 
@@ -457,9 +457,8 @@ class GameAction(object):
             uint16_t choice_total;
         } game_action_t;
         """
-        fmt = '<HHHHHHH'
         return struct.pack(
-            format,
+            '<HHHHHHH',
             *self.as_int_sequence()
         )
     
@@ -515,7 +514,7 @@ class GameState(object):
     def insert_event(self, input_tuple, first_action):
         if input_tuple in self.events:
             error(statefile, "Duplicate event insertion. This is likely a bug in this script. Alert george@queercon.org.",
-                  badtext=row['Input_detail'])
+                  badtext=input_tuple[1])
         self.events[input_tuple] = first_action
         if input_tuple[0] == 'ENTER':
             # This is the handle to our Enter event!
@@ -633,7 +632,7 @@ def read_states_and_validate(statefile):
                     error(statefile, "Duplicate state definition '%s'" % row['Input_detail'],
                           badtext=row['Input_detail'])
                 # TODO: Validate that other columns are empty.
-                new_state = GameState(row['Input_detail'].upper())
+                GameState(row['Input_detail'].upper())
                 continue
                 
             # TODO: Validate that the columns that should be numbers are 
@@ -741,13 +740,6 @@ def read_actions(statefile_param):
             #  in case 2. If not, it's case 1.
                 
             if input_tuple in current_state.events:
-                # This is case 2. It's a new action choice for an existing
-                # event.
-                current_choice_share = 1
-                if row['Choice_share']:
-                    # If a choice share is provided, use it:
-                    choice_share = int(row['Choice_share'])
-                
                 # Find the last action node in the choice set associated with
                 #  the current input tuple.
                 current_choice = current_state.events[input_tuple]
