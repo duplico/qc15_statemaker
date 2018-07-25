@@ -837,7 +837,10 @@ def read_state_data(statefile, allow_implicit, do_cull_nops):
     
     # Now, all the explicit states have been loaded, so they all have IDs.
     # Time to process the results.
-    read_actions(statefile)
+    try:
+        read_actions(statefile)
+    except Exception as e:
+        error(statefile, "PYTHON ERROR: %s" % e.message)
         
     # Get rid of any no-ops that we can delete.
     if do_cull_nops:
@@ -852,20 +855,28 @@ def read_state_data(statefile, allow_implicit, do_cull_nops):
         
     for action in all_actions:
         if action.action_type == 'STATE_TRANSITION':
-            # We want to add an edge, but we want the label to be the action
-            #  that starts the action sequence resulting in this state
-            #  transition. So we'll follow the chain back to the initial
-            #  action.
-            
-            # TODO: find pops, and load/stores
-            
-            label_action = action
-            while label_action.get_previous_action():
-                label_action = label_action.get_previous_action()
-                
             state_graph.add_edge(all_states[state_name_ids[action.state_name]], 
                                  action.detail, label=str(action.input_tuple))
         
+
+    # Let's consider doing two passes of this:
+
+    for action in all_actions:
+        if action.action_type == 'PREVIOUS':
+            node = all_states[state_name_ids[action.state_name]]
+            for predecessor in state_graph.predecessors(node):
+                state_graph.add_edge(
+                    node, predecessor, label=str(action.input_tuple)+' PREVIOUS'
+                )
+    
+    # for action in all_actions:
+    #     if action.action_type == 'PREVIOUS':
+    #         node = all_states[state_name_ids[action.state_name]]
+    #         for predecessor in state_graph.predecessors(node):
+    #             state_graph.add_edge(
+    #                 node, predecessor, label=str(action.input_tuple)+' PREVIOUS'
+    #             )
+
     undirected = state_graph.to_undirected()
     if not nx.is_connected(undirected):
         error(statefile, "Detected that the state graph may not be connected!",
