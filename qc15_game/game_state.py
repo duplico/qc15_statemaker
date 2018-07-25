@@ -16,7 +16,7 @@ state_name_ids = dict()
 
 all_other_input_descs = [
     'BADGESNEARBY0', # Specialized ENTER event
-    'BADGESNEARBYMORETHAN1', # Specialized ENTER event
+    'BADGESNEARBYSOME', # Specialized ENTER event
 ]
 
 all_other_output_descs = [
@@ -399,6 +399,10 @@ class GameAction(object):
             action_type = 'TEXT'
             frame_text = frame
             
+            if len(text_frames) > 1 and frame_text.count(' ') == 0:
+                error(statefile, "Detected single-word wrap. Consider revising.",
+                      badtext=frame_text, errtype="WARNING")
+
             frame_dur = duration
             if frame_dur is None:
                 frame_dur =  0.5 + 0.03125*len(frame_text)
@@ -844,7 +848,7 @@ def read_state_data(statefile, allow_implicit, do_cull_nops):
     state_graph = nx.MultiDiGraph()
     
     for state in all_states:
-        state_graph.add_node(state.name)
+        state_graph.add_node(state)
         
     for action in all_actions:
         if action.action_type == 'STATE_TRANSITION':
@@ -859,9 +863,14 @@ def read_state_data(statefile, allow_implicit, do_cull_nops):
             while label_action.get_previous_action():
                 label_action = label_action.get_previous_action()
                 
-            state_graph.add_edge(action.state_name, action.detail,
-                                 label=str(action.input_tuple))
+            state_graph.add_edge(all_states[state_name_ids[action.state_name]], 
+                                 action.detail, label=str(action.input_tuple))
         
+    undirected = state_graph.to_undirected()
+    if not nx.is_connected(undirected):
+        error(statefile, "Detected that the state graph may not be connected!",
+              row=0, col=0, errtype="WARNING")
+
     return state_graph
 
 def cull_nops():
@@ -918,6 +927,11 @@ def get_action_graph():
                 label=str(input_tuple)
             )
     
+    undirected = action_graph.to_undirected()
+    if not nx.is_connected(undirected):
+        error(statefile, "Detected that the action graph may not be connected!",
+              row=0, col=0, errtype="WARNING")
+
     return action_graph
 
     
