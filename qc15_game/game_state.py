@@ -12,7 +12,6 @@ from qc15_game import *
 
 all_actions = []
 all_states = []
-all_animations = []
 state_name_ids = dict()
 
 all_other_input_descs = [
@@ -22,6 +21,11 @@ all_other_input_descs = [
 
 all_other_output_descs = [
     'CUSTOMSTATEUSERNAME', # User name entry
+]
+
+all_animations = [
+    'lightsSolidWhite', # TODO: Make these all caps, too.
+    'lightsWhiteFader'
 ]
 
 row_number = 0
@@ -386,6 +390,11 @@ class GameAction(object):
         
         if not text_frames:
             text_frames.append(' ')
+
+        if input_tuple[0] == 'TIMER_R' and len(text_frames) > 1:
+            error(statefile, "Text wrap in recurring timer at marker, which causes unsatisfactory behavior.",
+                  badtext=text_frames[1], errtype="WARNING")
+
         for frame in text_frames:
             action_type = 'TEXT'
             frame_text = frame
@@ -620,6 +629,11 @@ def read_states_and_validate(statefile):
         no_contd_allowed = 1
         for row in csvreader:
             row_number += 1
+            if row['Input_type'] == '':
+                for field in csvreader.fieldnames:
+                    if row[field]:
+                        error(statefile, "Blank input type, but line has more contents.",
+                              badtext=row[field], errtype="WARNING")
             if row['Input_type'] in IGNORE_INPUT_TYPES:
                 continue # Skip blank and ignored (comment/action) lines
             if not state_is_set and row['Input_type'] != 'START_STATE':
@@ -774,6 +788,7 @@ def display_data_str(outfile=sys.stdout):
     # TODO:
     print("uint16_t all_anims_len = %d;" % len(all_animations), file=outfile)
     print("", file=outfile)
+    print("// %s" % ", ".join(all_animations), file=outfile)
     
     print("uint8_t all_text[][25] = {%s};" % ','.join(map(lambda a: '"%s"' % a.replace('"', '\\"').strip(), all_text)), file=outfile)
     print("", file=outfile)
