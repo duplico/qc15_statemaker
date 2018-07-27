@@ -13,6 +13,7 @@ from qc15_game import *
 all_actions = []
 all_states = []
 state_name_ids = dict()
+closable_states = set()
 
 all_other_input_descs = [
     'BADGESNEARBY0', # Specialized ENTER event
@@ -815,10 +816,6 @@ def display_data_str(outfile=sys.stdout):
         print("#define OTHER_ACTION_%s %d" % (other_type, i), file=outfile)
         i += 1
         
-    closable_states = set()
-    for action in all_actions:
-        if action.action_type == 'CLOSE':
-            closable_states.add(action.state_name)
     print("#define CLOSABLE_STATES %d" % len(closable_states), file=outfile)
     
 def read_state_data(statefile, allow_implicit, do_cull_nops):
@@ -881,6 +878,21 @@ def read_state_data(statefile, allow_implicit, do_cull_nops):
     if not nx.is_connected(undirected):
         error(statefile, "Detected that the state graph may not be connected!",
               row=0, col=0, errtype="WARNING")
+
+    
+    for action in all_actions:
+        if action.action_type == 'CLOSE':
+            closable_states.add(action.state_name)
+
+    for state in all_states:
+        bad_problem = True
+        for successor in state_graph.successors(state):
+            if successor not in closable_states:
+                bad_problem = False
+                break
+        if bad_problem:
+            error(statefile, "All successor states of %s are closable!" % state.name, 
+                  row=0, col=0)
 
     return state_graph
 
