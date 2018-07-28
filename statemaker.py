@@ -4,6 +4,7 @@ import argparse
 import os
 
 import networkx as nx
+from intelhex import IntelHex
 
 import qc15_game.game_state
 from qc15_game.game_state import *
@@ -35,7 +36,11 @@ def main():
             " with the code-style output of the statemaker.")
     parser.add_argument('--no-warn-wrap', action='store_true',
                         help="Don't warn if a single-word wrap is found.")
-    
+    parser.add_argument('--binfile', action='store', type=str)
+    parser.add_argument('--text-loc', action='store', type=int, default=0x310000)
+    parser.add_argument('--state-loc', action='store', type=int, default=0x320000)
+    parser.add_argument('--action-loc', action='store', type=int, default=0x300000)
+
     args = parser.parse_args()
     if not os.path.isfile(args.statefile):
         print("FATAL: %s" % (args.statefile))
@@ -43,9 +48,6 @@ def main():
         exit(1)
     
     qc15_game.game_state.warn_on_wrap = not args.no_warn_wrap
-
-    # TODO: default duration
-    # TODO: allow implicit
     
     state_graph = read_state_data(args.statefile, args.allow_implicit,
                                   args.cull_nops)
@@ -62,5 +64,20 @@ def main():
         with open(args.output_cfile, 'w') as outfile:
             display_data_str(outfile)
     
+    if args.binfile:
+        flash = IntelHex()
+
+        binary_data = pack_structs()
+
+        flash.puts(args.text_loc, binary_data['text'])
+        flash.puts(args.action_loc, binary_data['actions'])
+        flash.puts(args.state_loc, binary_data['states'])
+        
+        if args.binfile.endswith('.hex'):
+            flash.write_hex_file(args.binfile)
+        else:
+            flash.tobinfile(args.binfile)
+
+
 if __name__ == "__main__":
     main()
