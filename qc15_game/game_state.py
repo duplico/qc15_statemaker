@@ -15,6 +15,10 @@ all_states = []
 state_name_ids = dict()
 closable_states = set()
 
+max_inputs = 0
+max_timers = 0
+max_others = 0
+
 all_other_input_descs = [
     'BADGESNEARBY0', # Specialized ENTER event
     'BADGESNEARBYSOME', # Specialized ENTER event
@@ -573,12 +577,30 @@ class GameState(object):
             uint8_t input_series_len;
             uint8_t other_series_len;
 
-            game_timer_t timer_series[5];
-            game_user_in_t input_series[6];
-            game_other_in_t other_series[3];
+            game_timer_t timer_series[X];
+            game_user_in_t input_series[X];
+            game_other_in_t other_series[X];
         } game_state_t;
         """
-        pass
+        bytes = ''
+        bytes += struct.pack('<HBBBx', self.as_int_sequence())
+
+        for timer in self.timers:
+            bytes += timer.pack()
+        # TODO: This is a dumb way to multiply:
+        for i in range(max_timers - len(self.timers)):
+            bytes += '\x00'*8
+
+        for input in self.inputs:
+            bytes += input.pack()
+        for i in range(max_inputs - len(self.inputs)):
+            bytes += '\x00'*4
+        
+        for other in self.other_ins:
+            bytes += other.pack()
+        for i in range(max_others - len(self.other_ins)):
+            bytes += '\x00'*4
+
             
     def as_int_sequence(self):
         return (
@@ -790,10 +812,35 @@ def read_actions(statefile_param):
                 )
             current_action = next_action
         
+def pack_text(text):
+    assert len(text)<25 # Need at least one null term
+    return text + '\x00'*(25-len(text))
+
+def pack_structs():
+    packed_text = ''
+    for s in all_text:
+        packed_text += pack_text(s)
+    
+    packed_actions = ''
+    for a in all_actions:
+        packed_actions += a.pack()
+
+    packed_states = ''
+    for s in all_states:
+        packed_states += s
+    
+    return dict(text=packed_text, actions=packed_actions, states=packed_states)
+
+
 def display_data_str(outfile=sys.stdout):
     print("uint16_t all_actions_len = %d;" % len(all_actions), file=outfile)
     print("uint16_t all_text_len = %d;" % len(all_text), file=outfile)
     print("uint16_t all_states_len = %d;" % len(all_states), file=outfile)
+
+    print("#define MAX_INPUTS %d" % max_inputs, file=outfile)
+    print("#define MAX_TIMERS %d" % max_timers, file=outfile)
+    print("#define MAX_OTHERS %d" % max_others, file=outfile)
+
     # TODO:
     print("uint16_t all_anims_len = %d;" % len(all_animations), file=outfile)
     print("", file=outfile)
@@ -826,7 +873,6 @@ def display_data_str(outfile=sys.stdout):
     print("#define CLOSABLE_STATES %d" % len(closable_states), file=outfile)
     
 def read_state_data(statefile, allow_implicit, do_cull_nops):
-
     GameState.allow_implicit = allow_implicit
     
     # We do an initial pass to load the contents of the text into a buffer.
@@ -854,16 +900,22 @@ def read_state_data(statefile, allow_implicit, do_cull_nops):
     # Now we're going to build our pretty graph.
     state_graph = nx.MultiDiGraph()
     
+    global max_inputs, max_others, max_timers
+
     for state in all_states:
         state_graph.add_node(state)
+        if len(state.inputs) > max_inputs:
+            max_inputs = len(state.inputs)
+        if len(state.timers) > max_timers:
+            max_timers = len(state.timers)
+        if len(state.other_ins) > max_others:
+            max_others = len(state.other_ins)
         
     for action in all_actions:
         if action.action_type == 'STATE_TRANSITION':
             state_graph.add_edge(all_states[state_name_ids[action.state_name]], 
                                  action.detail, label=str(action.input_tuple))
         
-
-    # Let's consider doing two passes of this:
 
     for action in all_actions:
         if action.action_type == 'PREVIOUS':
@@ -872,14 +924,6 @@ def read_state_data(statefile, allow_implicit, do_cull_nops):
                 state_graph.add_edge(
                     node, predecessor, label=str(action.input_tuple)+' PREVIOUS'
                 )
-    
-    # for action in all_actions:
-    #     if action.action_type == 'PREVIOUS':
-    #         node = all_states[state_name_ids[action.state_name]]
-    #         for predecessor in state_graph.predecessors(node):
-    #             state_graph.add_edge(
-    #                 node, predecessor, label=str(action.input_tuple)+' PREVIOUS'
-    #             )
 
     undirected = state_graph.to_undirected()
     if not nx.is_connected(undirected):
@@ -925,26 +969,13 @@ def cull_nops():
         all_actions.remove(action)
             
 def escape_action(action):
-    return str(action.next_action).replace(':', ' ').replace('\\', '/')
+    return str(action).replace(':', ' ').replace('\\', '/')
 
 def get_action_graph():
     action_graph = nx.MultiDiGraph()
     # for action in all_actions:
         # action_graph.add_node(str(action))
         
-    for action in all_actions:
-        if action.next_action:
-            action_graph.add_edge(escape_action(action), escape_action(action.next_action),
-                                  label="next")
-        if action.next_choice:
-            action_graph.add_edge(escape_action(action), escape_action(action.next_choice),
-                                  label="alt")
-        if action.action_type == 'STATE_TRANSITION':
-            action_graph.add_edge(
-                escape_action(action),
-                str(action.detail)
-            )
-    
     for state in all_states:
         if state.id == 0:
             action_graph.add_node(str(state).replace(':', ' '), shape='star')
@@ -958,7 +989,22 @@ def get_action_graph():
                 str(state.events[input_tuple]).replace(':', ' '),
                 label=str(input_tuple)
             )
+
+    for action in all_actions:
+        if action.next_action:
+            action_graph.add_edge(escape_action(action), escape_action(action.next_action),
+                                  label="next")
+        if action.next_choice:
+            action_graph.add_edge(escape_action(action), escape_action(action.next_choice),
+                                  label="alt")
+        if action.action_type == 'STATE_TRANSITION':
+            action_graph.add_edge(
+                escape_action(action),
+                str(action.detail).replace(':', ' ')
+            )
     
+    # TODO: Add PREVIOUS lines!
+
     undirected = action_graph.to_undirected()
     if not nx.is_connected(undirected):
         error(statefile, "Detected that the action graph may not be connected!",
