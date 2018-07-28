@@ -583,7 +583,7 @@ class GameState(object):
         } game_state_t;
         """
         bytes = ''
-        bytes += struct.pack('<HBBBx', self.as_int_sequence())
+        bytes += struct.pack('<HBBBx', *self.as_int_sequence())
 
         for timer in self.timers:
             bytes += timer.pack()
@@ -600,6 +600,8 @@ class GameState(object):
             bytes += other.pack()
         for i in range(max_others - len(self.other_ins)):
             bytes += '\x00'*4
+
+        return bytes
 
             
     def as_int_sequence(self):
@@ -827,7 +829,7 @@ def pack_structs():
 
     packed_states = ''
     for s in all_states:
-        packed_states += s
+        packed_states += s.pack()
     
     return dict(text=packed_text, actions=packed_actions, states=packed_states)
 
