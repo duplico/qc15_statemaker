@@ -18,10 +18,14 @@ closable_states = set()
 all_other_input_descs = [
     'BADGESNEARBY0', # Specialized ENTER event
     'BADGESNEARBYSOME', # Specialized ENTER event
+    'NAME_NOT_FOUND',
+    'NAME_FOUND',
 ]
 
 all_other_output_descs = [
     'CUSTOMSTATEUSERNAME', # User name entry
+    'NAMESEARCH',
+    'SET_CONNECTABLE',
 ]
 
 all_animations = [
@@ -400,7 +404,7 @@ class GameAction(object):
             action_type = 'TEXT'
             frame_text = frame
             
-            if len(text_frames) > 1 and frame_text.count(' ') == 0:
+            if warn_on_wrap and len(text_frames) > 1 and frame_text.count(' ') == 0:
                 error(statefile, "Detected single-word wrap. Consider revising.",
                       badtext=frame_text, errtype="WARNING")
 
@@ -811,6 +815,9 @@ def display_data_str(outfile=sys.stdout):
         print("#define SPECIAL_%s %d" % (other_type, i), file=outfile)
         i += 1
         
+    for state in all_states:
+        print("#define STATE_ID_%s %d" % (state.name.replace(' ', '_'), state.id), file=outfile)
+
     i=0
     for other_type in all_other_output_descs:
         print("#define OTHER_ACTION_%s %d" % (other_type, i), file=outfile)
@@ -917,7 +924,9 @@ def cull_nops():
     for action in nops_to_delete:
         all_actions.remove(action)
             
-    
+def escape_action(action):
+    return str(action.next_action).replace(':', ' ').replace('\\', '/')
+
 def get_action_graph():
     action_graph = nx.MultiDiGraph()
     # for action in all_actions:
@@ -925,14 +934,14 @@ def get_action_graph():
         
     for action in all_actions:
         if action.next_action:
-            action_graph.add_edge(str(action).replace(':', ' '), str(action.next_action).replace(':', ' '),
+            action_graph.add_edge(escape_action(action), escape_action(action.next_action),
                                   label="next")
         if action.next_choice:
-            action_graph.add_edge(str(action).replace(':', ' '), str(action.next_choice).replace(':', ' '),
+            action_graph.add_edge(escape_action(action), escape_action(action.next_choice),
                                   label="alt")
         if action.action_type == 'STATE_TRANSITION':
             action_graph.add_edge(
-                str(action).replace(':', ' '),
+                escape_action(action),
                 str(action.detail)
             )
     
