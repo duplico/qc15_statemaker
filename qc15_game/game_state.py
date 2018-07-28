@@ -503,7 +503,7 @@ class GameAction(object):
         return (
             RESULT_TYPE_OUTPUT[self.action_type],
             self.detail_addr(),
-            int(self.duration*32),
+            int(self.duration*32) if self.action_type.startswith('TEXT') else int(self.duration),
             self.next_action.id() if self.next_action else NULL,
             self.next_choice.id() if self.next_choice else NULL,
             self.choice_share,
