@@ -5,6 +5,7 @@ import os
 
 import networkx as nx
 
+import qc15_game.game_state
 from qc15_game.game_state import *
 from qc15_game import *
 
@@ -32,6 +33,8 @@ def main():
     parser.add_argument('-c', '--output-cfile', type=str, default='',
         help="Path to the C file to generate, which will be overwritten"\
             " with the code-style output of the statemaker.")
+    parser.add_argument('--no-warn-wrap', action='store_true',
+                        help="Don't warn if a single-word wrap is found.")
     
     args = parser.parse_args()
     if not os.path.isfile(args.statefile):
@@ -39,12 +42,14 @@ def main():
         print(" File not found.")
         exit(1)
     
+    qc15_game.game_state.warn_on_wrap = not args.no_warn_wrap
+
     # TODO: default duration
     # TODO: allow implicit
     
     state_graph = read_state_data(args.statefile, args.allow_implicit,
                                   args.cull_nops)
-    
+
     if args.output_dotfile:
         nx.drawing.nx_pydot.write_dot(state_graph, args.output_dotfile)
     

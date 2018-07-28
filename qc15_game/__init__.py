@@ -32,3 +32,5 @@ ALLOWED_VARIABLES = {
 }
 
 NULL = 0xFFFF
+
+warn_on_wrap = True
