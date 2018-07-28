@@ -12,6 +12,7 @@ from qc15_game import *
 
 all_actions = []
 all_states = []
+all_text = []
 state_name_ids = dict()
 closable_states = set()
 
@@ -20,16 +21,21 @@ max_timers = 0
 max_others = 0
 
 all_other_input_descs = [
-    'BADGESNEARBY0', # Specialized ENTER event
-    'BADGESNEARBYSOME', # Specialized ENTER event
+    'BADGESNEARBY0',
+    'BADGESNEARBYSOME',
     'NAME_NOT_FOUND',
     'NAME_FOUND',
+    'CONNECT_SUCCESS_NEW',
+    'CONNECT_SUCCESS_OLD',
+    'CONNECT_FAILURE'
 ]
 
 all_other_output_descs = [
     'CUSTOMSTATEUSERNAME', # User name entry
     'NAMESEARCH',
     'SET_CONNECTABLE',
+    'CONNECT',
+    'STATUS_MENU',
 ]
 
 all_animations = [
@@ -40,9 +46,6 @@ all_animations = [
 row_number = 0
 row_lines = []
 statefile = ''
-
-all_text = []
-next_text_id = 0
 
 class GameTimer(object):
     def __init__(self, duration, recurring, result):
@@ -80,7 +83,7 @@ class GameTimer(object):
         return (
             int(self.duration * 32), # Convert from seconds to qc clock ticks
             self.recurring,
-            all_actions.index(self.result)
+            self.result.id()
         )
             
     def as_struct_text(self):
@@ -94,8 +97,6 @@ class GameInput(object):
             error(statefile, "Input text too long.", badtext=text)
         if text not in all_text:
             all_text.append(text)
-            global next_text_id
-            next_text_id += 1
         self.result = result
         self.text = text
     
@@ -114,7 +115,7 @@ class GameInput(object):
     def as_int_sequence(self):
         return (
             all_text.index(self.text),
-            all_actions.index(self.result)
+            self.result.id()
         )
             
     def as_struct_text(self):
@@ -148,7 +149,7 @@ class GameOther(object):
     def as_int_sequence(self):
         return (
             all_other_input_descs.index(self.desc),
-            all_actions.index(self.result)
+            self.result.id()
         )
             
     def as_struct_text(self):
@@ -188,11 +189,8 @@ class GameAction(object):
         
         # If we're text, we need to load the text into the master text list:        
         if self.action_type.startswith("TEXT"):
-            global all_text
-            global next_text_id
             if self.detail not in all_text:
                 all_text.append(self.detail)
-                next_text_id += 1
             
         if self.action_type == 'OTHER':
             self.detail = self.detail.upper().replace(' ', '_')
@@ -506,8 +504,8 @@ class GameAction(object):
             RESULT_TYPE_OUTPUT[self.action_type],
             self.detail_addr(),
             int(self.duration*32),
-            all_actions.index(self.next_action) if self.next_action else NULL,
-            all_actions.index(self.next_choice) if self.next_choice else NULL,
+            self.next_action.id() if self.next_action else NULL,
+            self.next_choice.id() if self.next_choice else NULL,
             self.choice_share,
             self.choice_total,
         )
