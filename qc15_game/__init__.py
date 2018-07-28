@@ -29,6 +29,7 @@ ALLOWED_VARIABLES = {
     'badgname' : '%s',
     'username' : '%s',
     'cnt' : '%d',
+    # 'cnctname' : '%s',
 }
 
 NULL = 0xFFFF
