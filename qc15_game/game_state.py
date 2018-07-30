@@ -12,7 +12,15 @@ from qc15_game import *
 
 all_actions = []
 all_states = []
-all_text = []
+main_text = [] # Lives in FRAM
+aux_text = [] # Lives in flash
+
+def text_addr(text):
+    if text in main_text:
+        return main_text.index(text)
+    else:
+        return len(main_text) + aux_text.index(text)
+
 state_name_ids = dict()
 closable_states = set()
 
@@ -95,8 +103,10 @@ class GameInput(object):
     def __init__(self, text, result):
         if len(text) > 23:
             error(statefile, "Input text too long.", badtext=text)
-        if text not in all_text:
-            all_text.append(text)
+        if text not in main_text:
+            main_text.append(text)
+            if text in aux_text:
+                aux_text.remove(text)
         self.result = result
         self.text = text
     
@@ -114,7 +124,7 @@ class GameInput(object):
             
     def as_int_sequence(self):
         return (
-            all_text.index(self.text),
+            text_addr(self.text),
             self.result.id()
         )
             
@@ -163,7 +173,7 @@ class GameAction(object):
     
     def __init__(self, input_tuple, state_name, prev_action, prev_choice,
                  action_type=None, detail=None, 
-                 duration=0, choice_share=1, row=None):
+                 duration=0, choice_share=1, row=None, aux=False):
         if row:
             action_type = row['Result_type']
             detail = row['Result_detail']
@@ -189,8 +199,10 @@ class GameAction(object):
         
         # If we're text, we need to load the text into the master text list:        
         if self.action_type.startswith("TEXT"):
-            if self.detail not in all_text:
-                all_text.append(self.detail)
+            if aux and self.detail not in aux_text and self.detail not in main_text:
+                    aux_text.append(self.detail)
+            elif self.detail not in main_text:
+                main_text.append(self.detail)
             
         if self.action_type == 'OTHER':
             self.detail = self.detail.upper().replace(' ', '_')
@@ -320,7 +332,8 @@ class GameAction(object):
             prev_choice, 
             row['Result_detail'],
             duration,
-            choice_share
+            choice_share,
+            aux=False
         )       
                 
         # This gave us two actions, which may be the same as each other.        
@@ -361,7 +374,8 @@ class GameAction(object):
                 choices_generated[i][0], # Wire the first actions together.
                 row[i],
                 duration,
-                choice_share
+                choice_share,
+                aux=True
             )
             choices_generated.append((f, l))
                 
@@ -391,7 +405,8 @@ class GameAction(object):
         
     @staticmethod
     def create_text_action_seq(input_tuple, state_name, prev_action,
-                               prev_choice, detail, duration, choice_share):
+                               prev_choice, detail, duration, choice_share,
+                               aux=False):
         first_action = None
         text_frames = textwrap.wrap(detail, 24)
         
@@ -433,7 +448,7 @@ class GameAction(object):
             new_action = GameAction(input_tuple, state_name, prev_action,
                                     prev_choice, action_type=action_type,
                                     detail=frame_text, duration=frame_dur,
-                                    choice_share=choice_share)
+                                    choice_share=choice_share, aux=aux)
                                     
             prev_action = new_action
             if not first_action:
@@ -484,7 +499,7 @@ class GameAction(object):
     
     def detail_addr(self):
         if self.action_type.startswith('TEXT'):
-            detail_addr = all_text.index(self.detail)
+            detail_addr = text_addr(self.detail)
         elif self.action_type.startswith('SET_ANIM'):
             detail_addr = all_animations.index(self.detail) if self.detail else NULL
         elif self.action_type == 'STATE_TRANSITION':
@@ -818,7 +833,7 @@ def pack_text(text):
 
 def pack_structs():
     packed_text = ''
-    for s in all_text:
+    for s in main_text: # TODO!!!!!!
         packed_text += pack_text(s)
     
     packed_actions = ''
@@ -834,7 +849,10 @@ def pack_structs():
 
 def display_data_str(outfile=sys.stdout):
     print("uint16_t all_actions_len = %d;" % len(all_actions), file=outfile)
-    print("uint16_t all_text_len = %d;" % len(all_text), file=outfile)
+    print("uint16_t main_text_len = %d;" % len(main_text), file=outfile)
+    print("#define MAIN_TEXT_LEN %d" % len(main_text), file=outfile)
+    print("#define AUX_TEXT_LEN %d" % len(aux_text), file=outfile)
+
     print("uint16_t all_states_len = %d;" % len(all_states), file=outfile)
 
     print("#define MAX_INPUTS %d" % max_inputs, file=outfile)
@@ -846,9 +864,12 @@ def display_data_str(outfile=sys.stdout):
     print("", file=outfile)
     print("// %s" % ", ".join(all_animations), file=outfile)
     
-    print("uint8_t all_text[][25] = {%s};" % ','.join(map(lambda a: '"%s"' % a.replace('"', '\\"').strip(), all_text)), file=outfile)
+    print("uint8_t main_text[][25] = {%s};" % ','.join(map(lambda a: '"%s"' % a.replace('"', '\\"').strip(), main_text)), file=outfile)
     print("", file=outfile)
     
+    print("uint8_t aux_text[][25] = {%s};" % ','.join(map(lambda a: '"%s"' % a.replace('"', '\\"').strip(), aux_text)), file=outfile)
+    print("", file=outfile)
+
     all_actions_structs = map(GameAction.as_struct_text, all_actions)
     print("game_action_t all_actions[] = {%s};" % ', '.join(all_actions_structs), file=outfile)
     print("", file=outfile)
