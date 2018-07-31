@@ -11,6 +11,8 @@ from chardet.universaldetector import UniversalDetector
 from qc15_game import *
 
 all_actions = []
+main_actions = []
+aux_actions = []
 all_states = []
 main_text = [] # Lives in FRAM
 aux_text = [] # Lives in flash
@@ -48,7 +50,21 @@ all_other_output_descs = [
 
 all_animations = [
     'lightsSolidWhite', # TODO: Make these all caps, too.
-    'lightsWhiteFader'
+    'lightsWhiteFader',
+    'animSpinBlue',
+    'whiteDiscovery',
+    'animSolidBlue',
+    'animSpinOrange',
+    'animSolidGreen',
+    'animSolidYellow',
+    'animSpinGreen',
+    'animSpinRed',
+    'animSolidOrange',
+    'animSolidRed',
+    'animSpinWhite',
+    'animSpinPink',
+    'animFallBlue',
+    'animFallYellow',
 ]
 
 row_number = 0
@@ -182,6 +198,10 @@ class GameAction(object):
             choice_share = int(row['Choice_share']) if row['Choice_share'] else 1
             
         all_actions.append(self)
+        if (aux):
+            aux_actions.append(self)
+        else:
+            main_actions.append(self)
         self.action_type = action_type
         self.state_name = state_name
         self.detail = detail
@@ -199,6 +219,7 @@ class GameAction(object):
         
         # If we're text, we need to load the text into the master text list:        
         if self.action_type.startswith("TEXT"):
+            self.detail = self.detail.replace('`', '\x96')
             if aux and self.detail not in aux_text and self.detail not in main_text:
                     aux_text.append(self.detail)
             elif self.detail not in main_text:
@@ -833,7 +854,9 @@ def pack_text(text):
 
 def pack_structs():
     packed_text = ''
-    for s in main_text: # TODO!!!!!!
+    for s in main_text:
+        packed_text += pack_text(s)
+    for s in aux_text:
         packed_text += pack_text(s)
     
     packed_actions = ''
@@ -848,35 +871,36 @@ def pack_structs():
 
 
 def display_data_str(outfile=sys.stdout):
-    print("uint16_t all_actions_len = %d;" % len(all_actions), file=outfile)
-    print("uint16_t main_text_len = %d;" % len(main_text), file=outfile)
-    print("#define MAIN_TEXT_LEN %d" % len(main_text), file=outfile)
-    print("#define AUX_TEXT_LEN %d" % len(aux_text), file=outfile)
+    print("#define ALL_ACTIONS_LEN %d" % len(all_actions), file=outfile)
+    print("#define ALL_TEXT_LEN %d" % len(main_text), file=outfile)
+    print("#define all_states_len %d" % len(all_states), file=outfile)
 
-    print("uint16_t all_states_len = %d;" % len(all_states), file=outfile)
-
-    print("#define MAX_INPUTS %d" % max_inputs, file=outfile)
     print("#define MAX_TIMERS %d" % max_timers, file=outfile)
+    print("#define MAX_INPUTS %d" % max_inputs, file=outfile)
     print("#define MAX_OTHERS %d" % max_others, file=outfile)
 
     # TODO:
-    print("uint16_t all_anims_len = %d;" % len(all_animations), file=outfile)
+    print("#define GAME_ANIMS_LEN %d" % len(all_animations), file=outfile)
     print("", file=outfile)
     print("// %s" % ", ".join(all_animations), file=outfile)
     
-    print("uint8_t main_text[][25] = {%s};" % ','.join(map(lambda a: '"%s"' % a.replace('"', '\\"').strip(), main_text)), file=outfile)
-    print("", file=outfile)
+    # print("uint8_t main_text[][25] = {%s};" % ','.join(map(lambda a: '"%s"' % a.replace('"', '\\"').strip(), main_text)), file=outfile)
+    # print("", file=outfile)
     
-    print("uint8_t aux_text[][25] = {%s};" % ','.join(map(lambda a: '"%s"' % a.replace('"', '\\"').strip(), aux_text)), file=outfile)
-    print("", file=outfile)
+    # print("uint8_t aux_text[][25] = {%s};" % ','.join(map(lambda a: '"%s"' % a.replace('"', '\\"').strip(), aux_text)), file=outfile)
+    # print("", file=outfile)
 
-    all_actions_structs = map(GameAction.as_struct_text, all_actions)
-    print("game_action_t all_actions[] = {%s};" % ', '.join(all_actions_structs), file=outfile)
-    print("", file=outfile)
+    # main_actions_structs = map(GameAction.as_struct_text, main_actions)
+    # print("game_action_t main_actions[] = {%s};" % ', '.join(main_actions_structs), file=outfile)
+    # print("", file=outfile)
+
+    # aux_actions_structs = map(GameAction.as_struct_text, aux_actions)
+    # print("game_action_t aux_actions[] = {%s};" % ', '.join(aux_actions_structs), file=outfile)
+    # print("", file=outfile)
     
-    all_states_structs = map(GameState.as_struct_text, all_states)
-    print("game_state_t all_states[] = {%s};" % ', '.join(all_states_structs), file=outfile)
-    print("", file=outfile)
+    # all_states_structs = map(GameState.as_struct_text, all_states)
+    # print("game_state_t all_states[] = {%s};" % ', '.join(all_states_structs), file=outfile)
+    # print("", file=outfile)
     
     i=0
     for other_type in all_other_input_descs:
@@ -964,7 +988,7 @@ def read_state_data(statefile, allow_implicit, do_cull_nops):
                 break
         if bad_problem:
             error(statefile, "All successor states of %s are closable!" % state.name, 
-                  row=0, col=0)
+                  row=0, col=0, errtype="WARNING")
 
     return state_graph
 
@@ -988,9 +1012,13 @@ def cull_nops():
     
     for action in nops_to_delete:
         all_actions.remove(action)
+        if action in main_actions:
+            main_actions.remove(action)
+        else:
+            aux_actions.remove(action)
             
 def escape_action(action):
-    return str(action).replace(':', ' ').replace('\\', '/')
+    return str(action).replace(':', ' ').replace('\\', '/').replace('\x96', '`')
 
 def get_action_graph():
     action_graph = nx.MultiDiGraph()
@@ -1007,7 +1035,7 @@ def get_action_graph():
                 continue
             action_graph.add_edge(
                 str(state).replace(':', ' '),
-                str(state.events[input_tuple]).replace(':', ' '),
+                str(state.events[input_tuple]).replace(':', ' ').replace('\x96', '`'),
                 label=str(input_tuple)
             )
 
