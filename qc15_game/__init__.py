@@ -22,6 +22,7 @@ RESULT_TYPE_OUTPUT = {
     'TEXT_BADGNAME' : 17,
     'TEXT_USERNAME' : 18,
     'TEXT_CNT' : 19,
+    'TEXT_CNCTDNAME' : 20,
     'OTHER' : 100
 }
                       
@@ -29,7 +30,7 @@ ALLOWED_VARIABLES = {
     'badgname' : '%s',
     'username' : '%s',
     'cnt' : '%d',
-    # 'cnctname' : '%s',
+    'cnctdname' : '%s',
 }
 
 NULL = 0xFFFF

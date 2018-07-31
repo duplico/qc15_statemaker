@@ -393,13 +393,18 @@ each line of each choice may use a single variable, as well.
 
 The following variables are currently implemented:
 
-``$badgname``
-    (Note that there is no "e" in ``badg``.) This is substituted with the
-    pre-assigned name of the badge.
+``$badgename``
+    This is substituted with the pre-assigned name of the badge.
     
-``$username``
+``$user_name``
     This is substituted with the user's entered name, or "human" if
     the name hasn't been set yet.
+    
+``$cnctdname``
+    The name of the badge that this one most recently connected to.
+    
+``$cnt``
+    The number of other badges nearby.
     
 The following variables CAN be implemented, but aren't. Please don't ask for
 more than a small number of them:
