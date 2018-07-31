@@ -99,7 +99,7 @@ class GameTimer(object):
         } game_timer_t;
         """
         return struct.pack(
-            '<LxBH',
+            '<LBxH',
             *self.as_int_sequence()
         )
             
@@ -114,6 +114,12 @@ class GameTimer(object):
         struct_text = "(game_timer_t){.duration=%d, .recurring=%d, " \
                       ".result_action_id=%d}" % self.as_int_sequence()
         return struct_text
+
+    def __str__(self):
+        return '%d %s' % (self.duration, 'R' if self.recurring else 'O')
+
+    def __repr__(self):
+        return str(self)
 
 class GameInput(object):
     def __init__(self, text, result):
@@ -587,7 +593,7 @@ class GameState(object):
                 error(statefile, "Could not convert '%s' to positive integer" % input_tuple[1],
                       row_number, badtext=input_tuple[1])
             
-            self.timers.append(GameTimer(dur, input_tuple == 'TIMER_R', 
+            self.timers.append(GameTimer(dur, input_tuple[0] == 'TIMER_R', 
                                          first_action))
             self.timers.sort(key=GameTimer.sort_key) # Always in order.
             
