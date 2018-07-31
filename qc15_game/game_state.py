@@ -855,8 +855,9 @@ def read_actions(statefile_param):
             current_action = next_action
         
 def pack_text(text):
-    assert len(text)<25 # Need at least one null term
-    return text + '\x00'*(25-len(text))
+    t = text.strip()
+    assert len(t)<25 # Need at least one null term
+    return t + '\x00'*(25-len(t))
 
 def pack_structs():
     packed_text = ''
