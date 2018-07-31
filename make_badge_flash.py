@@ -17,29 +17,30 @@ def main():
     
     parser.add_argument('-o', '--hexpath', action='store', type=str, default='a.bin', help='Output file path')
     parser.add_argument('-b', '--badge-name', action='store', type=str, default='Skippy')
-    parser.add_argument('id', type=int, action='store', default=1)
-        
+    parser.add_argument('game_hex', type=str, action='store')
+    parser.add_argument('id', type=int, action='store')
+    
     args = parser.parse_args()
         
     flash = IntelHex()
-    all_frames = []
-    curr_frame_index = 0
-    tile_animations = [] # This is a bit sequence
-    game_animations = [] # This is a bit sequence (not nested)
+
+    flash.loadhex(args.game_hex)
     
-    # The reserved keyword
-    put_bytes_at(flash, 0, [0xAB])
+    # The sentinel word:
+    flash.puts(0, '\xab\xba')
     
     # OK. The badge will handle the main and backup confs.
     # All we need along those lines is to give it the ID.
-    put_bytes_at(flash, 0x010000, map(ord, struct.pack('<H', args.id)))
-    put_bytes_at(flash, 0x040000, map(ord, struct.pack('<H', args.id)))
+    flash.puts(0x010000, struct.pack('<H', args.id))
+    flash.puts(0x040000, struct.pack('<H', args.id))
     
     # Badge name goes here:
-    put_bytes_at(flash, 0x030000, map(ord, struct.pack('11s', args.badge_name)))
-    put_bytes_at(flash, 0x060000, map(ord, struct.pack('11s', args.badge_name)))
+    # TODO: get it out of the badge file instead.
+    flash.puts(0x030000, struct.pack('11s', args.badge_name))
+    flash.puts(0x060000, struct.pack('11s', args.badge_name))
     
     # TODO: Add ALL the badge names, reading them from a file.
+    # flash.puts
     
     if args.hexpath.endswith('.hex'):
         flash.write_hex_file(args.hexpath)
