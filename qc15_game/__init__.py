@@ -19,16 +19,16 @@ RESULT_TYPE_OUTPUT = {
     'CLOSE' : 6,
     'NOP' : 7,
     'TEXT' : 16,
-    'TEXT_BADGNAME' : 17,
-    'TEXT_USERNAME' : 18,
+    'TEXT_BADGENAME' : 17,
+    'TEXT_USER_NAME' : 18,
     'TEXT_CNT' : 19,
     'TEXT_CNCTDNAME' : 20,
     'OTHER' : 100
 }
                       
 ALLOWED_VARIABLES = {
-    'badgname' : '%s',
-    'username' : '%s',
+    'badgename' : '%s',
+    'user_name' : '%s',
     'cnt' : '%d',
     'cnctdname' : '%s',
 }

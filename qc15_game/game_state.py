@@ -49,22 +49,41 @@ all_other_output_descs = [
 ]
 
 all_animations = [
-    'lightsSolidWhite', # TODO: Make these all caps, too.
-    'lightsWhiteFader',
-    'animSpinBlue',
-    'whiteDiscovery',
-    'animSolidBlue',
-    'animSpinOrange',
-    'animSolidGreen',
-    'animSolidYellow',
-    'animSpinGreen',
-    'animSpinRed',
-    'animSolidOrange',
-    'animSolidRed',
-    'animSpinWhite',
-    'animSpinPink',
-    'animFallBlue',
-    'animFallYellow',
+    'flag_rainbow',
+    'flag_bi',
+    'flag_pan',
+    'flag_trans',
+    'flag_ace',
+    'flag_ally',
+    'flag_leather',
+    'flag_bear',
+    'flag_blue',
+    'flag_lblue',
+    'flag_green',
+    'flag_red',
+    'flag_yellow',
+    'flag_pink',
+    'flag_white',
+    'flag_newbie',
+    'flag_original',
+    'flag_regular',
+    'flag_freezer',
+    # 'lightsSolidWhite', # TODO: Make these all caps, too.
+    # 'animSpinBlue',
+    # 'whiteDiscovery',
+    # 'animSolidBlue',
+    # 'animSpinOrange',
+    # 'animSolidGreen',
+    # 'animSolidYellow',
+    # 'animSpinGreen',
+    # 'animSpinRed',
+    # 'animSolidOrange',
+    # 'animSolidRed',
+    # 'animSpinWhite',
+    # 'animSpinPink',
+    # 'animFallBlue',
+    # 'animFallYellow',
+    # 'animFallWhite'
 ]
 
 row_number = 0
@@ -248,7 +267,7 @@ class GameAction(object):
             
         if self.action_type.startswith("SET_ANIM"):
             global all_animations
-            if self.detail == 'NONE':
+            if self.detail.upper().strip() == 'NONE':
                 self.detail = None
             elif self.detail not in all_animations:
                 all_animations.append(self.detail)
