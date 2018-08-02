@@ -68,22 +68,22 @@ all_animations = [
     'flag_original',
     'flag_regular',
     'flag_freezer',
-    # 'lightsSolidWhite', # TODO: Make these all caps, too.
-    # 'animSpinBlue',
-    # 'whiteDiscovery',
-    # 'animSolidBlue',
-    # 'animSpinOrange',
-    # 'animSolidGreen',
-    # 'animSolidYellow',
-    # 'animSpinGreen',
-    # 'animSpinRed',
-    # 'animSolidOrange',
-    # 'animSolidRed',
-    # 'animSpinWhite',
-    # 'animSpinPink',
-    # 'animFallBlue',
-    # 'animFallYellow',
-    # 'animFallWhite'
+    'flag_techsupport',
+    'animFirstLights',
+    'whiteDiscovery',
+    'animSpinBlue',
+    'animSpinOrange',
+    'animSpinYellow',
+    'animSpinGreen',
+    'animSpinRed',
+    'animSpinWhite',
+    'animSpinPink',
+    'animSolidBlue',
+    'animSolidGreen',
+    'animSolidYellow',
+    'animSolidOrange',
+    'animSolidRed',
+    'animSolidWhite'
 ]
 
 row_number = 0
@@ -144,6 +144,9 @@ class GameInput(object):
     def __init__(self, text, result):
         if len(text) > 23:
             error(statefile, "Input text too long.", badtext=text)
+        if '$' in text:
+            error(statefile, "Variables not allowed in inputs, treating as literal.",
+                  errtype="WARNING")
         if text not in main_text:
             main_text.append(text)
             if text in aux_text:
