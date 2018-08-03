@@ -476,7 +476,10 @@ class GameAction(object):
 
             frame_dur = duration
             if frame_dur is None:
-                frame_dur =  0.5 + 0.03125*len(frame_text)
+                if len(frame_text.strip())>0:
+                    frame_dur =  0.65 + 0.0425*len(frame_text)
+                else:
+                    frame_dur =  0.95
             
             variable_count = sum(frame_text.count('$%s' % variable) for variable in ALLOWED_VARIABLES)
             if variable_count > 1:
