@@ -1,3 +1,8 @@
+__author__ = "George Louthan @duplico"
+__copyright__ = "(c) 2018, George Louthan"
+__license__ = "MIT"
+__email__ = "duplico@dupli.co"
+
 REQUIRED_HEADINGS = ['Input_type', 'Input_detail', 'Choice_share', 
                      'Result_duration', 'Result_type', 'Result_detail']
 

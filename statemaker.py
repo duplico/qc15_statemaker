@@ -1,3 +1,6 @@
+"""The main driver file for QC15's Statemaker tool.
+"""
+
 from __future__ import print_function
 
 import argparse
@@ -9,6 +12,11 @@ from intelhex import IntelHex
 import qc15_game.game_state
 from qc15_game.game_state import *
 from qc15_game import *
+
+__author__ = "George Louthan @duplico"
+__copyright__ = "(c) 2018, George Louthan"
+__license__ = "MIT"
+__email__ = "duplico@dupli.co"
 
 def main():
     parser = argparse.ArgumentParser("Parse the state data for a qc15 badge.")

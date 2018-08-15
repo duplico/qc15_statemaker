@@ -1,3 +1,5 @@
+"""Tool to assemble statemaker output and ID numbers to a QC15 flash image."""
+
 import math
 import argparse
 import os, os.path
@@ -5,6 +7,11 @@ import os, os.path
 import struct
 from intelhex import IntelHex
 from PIL import Image
+
+__author__ = "George Louthan @duplico"
+__copyright__ = "(c) 2018, George Louthan"
+__license__ = "MIT"
+__email__ = "duplico@dupli.co"
 
 # Returns next position
 def put_bytes_at(ih, position, bts):
