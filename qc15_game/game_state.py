@@ -903,6 +903,7 @@ def pack_structs():
 
 
 def display_data_str(outfile=sys.stdout):
+    print("/// Definitions for the state game. GENERATED FILE: DO NOT EDIT DIRECTLY.\n\n", file=outfile)
     print("#define ALL_ACTIONS_LEN %d" % len(all_actions), file=outfile)
     print("#define ALL_TEXT_LEN %d" % len(main_text), file=outfile)
     print("#define all_states_len %d" % len(all_states), file=outfile)
