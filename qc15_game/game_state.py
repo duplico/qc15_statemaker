@@ -1,3 +1,6 @@
+"""The game state object implementations for QC15's Statemaker tool.
+"""
+
 from __future__ import print_function
 
 import sys
@@ -9,6 +12,11 @@ import networkx as nx
 from chardet.universaldetector import UniversalDetector
 
 from qc15_game import *
+
+__author__ = "George Louthan @duplico"
+__copyright__ = "(c) 2018, George Louthan"
+__license__ = "MIT"
+__email__ = "duplico@dupli.co"
 
 all_actions = []
 main_actions = []
